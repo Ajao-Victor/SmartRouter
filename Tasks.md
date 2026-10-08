@@ -94,7 +94,7 @@
 - `components/ui/__tests__/Sheet.test.tsx` — opens, traps focus, closes on Esc.
 **Acceptance:** Storybook not required; a `app/dev/primitives/page.tsx` (dev-only, gated by `NODE_ENV`) renders all primitives for visual check.
 
-### Task 7 — FX components (the futuristic layer)  `todo`
+### Task 7 — FX components (the futuristic layer)  `done` (2026-10-08; commits: 24d479c a88d01e 39c9382 ddd2d9f 06996fb 2cfd079 9a7f387 37c2ad1 5a490b8 f7b92d9 e0fb230 8d249d7 616a2dc 489edf5 8a94223 3152c2e a3aa125 5e23b75 1077d88 342ea4c a7432f6 1358040)
 **Files**
 - `components/fx/NumberTicker.tsx` — **done in Task 6** (needed by PriceTag): `useSpring` on value; `useTransform` → formatter; `tick` lift on change; `aria-live="polite"`; instant under reduced motion.
 - `components/fx/GlitchText.tsx` — 3 layered spans with `clip-path` slices + hue shift, 600 ms, runs once on mount/change of `text`; fallback plain text.
