@@ -43,7 +43,7 @@
 **Animations:** none.
 **Acceptance:** unit tests pass; `apiFetch` sends credentials and header (test with a mocked `fetch`).
 
-### Task 3 — Design tokens, fonts, Tailwind theme, global styles  `todo`
+### Task 3 — Design tokens, fonts, Tailwind theme, global styles  `done` (2026-10-08; commits: 81a1d1b 862ad76 dc1d2bf 46b9a79 915efaf 305bb88 a6c9c67 23019f4 7dcd579)
 **Files**
 - `styles/tokens.css` — every token from `UI_UX_Brief.md` §2 on `:root` (dark) and `[data-theme="light"]`; `@property --angle` for conic borders.
 - `styles/animations.css` — keyframes: `shimmer`, `stripes` (testnet banner), `caret`, `hueDrift` (WebGL fallback), `spinSlow`.
