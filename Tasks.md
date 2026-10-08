@@ -206,7 +206,7 @@
 **Animations:** `hud` variants; ring drains (`level` spring) on `applyVoucher`; refill + ParticleBurst on `endTopUp`.
 **Acceptance:** states ok/low/used/toppingUp visually distinct on dev page; tests pass.
 
-### Task 16 — Wallet sheet (UI only), Settings page  `todo`
+### Task 16 — Wallet sheet (UI only), Settings page  `done` (2026-10-08; commits: 8756f8f 04ebec7 0916aaf 5b5b53d 479bbd7 bd9959b 7fe258b 22004ec b24fd56 62c37a1 1bf37ea 05e9302 1b401dd 87e71e1 8b7ed15 22c07ef 9267d0e)
 **Files**
 - `components/wallet/WalletSheet.tsx` — `Sheet`; sections: `BalanceList`, actions (`DepositButton`, `SwapButton` conditional), `AllocationControls`, `SpendPermissionCard`, `ComingSoonCard`×2; "Returned $x from closed allocation" notice when session `closed` with unspent.
 - `components/wallet/BalanceList.tsx` — HoloCard per token (USDC.e, OUSD, pathUSD, USDT0, …) with `NumberTicker`; teal "Deposit splash" ripple when a balance increases.
