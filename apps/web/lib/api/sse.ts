@@ -136,12 +136,12 @@ export async function runStream(body: RunInput, handlers: RunHandlers, signal?: 
   };
   signal?.addEventListener('abort', onOuterAbort);
 
-  let watchdog: number | null = null;
-  let timedOut = false;
+  const watchdog: { id: number | null } = { id: null };
+  const state = { timedOut: false };
   const kick = () => {
-    if (watchdog !== null) window.clearTimeout(watchdog);
-    watchdog = window.setTimeout(() => {
-      timedOut = true;
+    if (watchdog.id !== null) window.clearTimeout(watchdog.id);
+    watchdog.id = window.setTimeout(() => {
+      state.timedOut = true;
       controller.abort();
     }, WATCHDOG_MS);
   };
@@ -154,6 +154,10 @@ export async function runStream(body: RunInput, handlers: RunHandlers, signal?: 
       handlers.onError?.(e);
       return { kind: 'error', data: e };
     }
+    // Aborting must unblock a pending read even when the body is not tied to the fetch signal.
+    controller.signal.addEventListener('abort', () => {
+      reader.cancel().catch(() => undefined);
+    });
     const decoder = new TextDecoder();
     let buffer = '';
     kick();
@@ -169,6 +173,8 @@ export async function runStream(body: RunInput, handlers: RunHandlers, signal?: 
         if (outcome) return outcome;
       }
     }
+    if (state.timedOut) throw new DOMException('watchdog', 'AbortError');
+    if (controller.signal.aborted) return { kind: 'aborted' };
     const tail = parseFrames(`${buffer}\n\n`);
     for (const f of tail.frames) {
       const outcome = dispatch(f, handlers);
@@ -178,7 +184,7 @@ export async function runStream(body: RunInput, handlers: RunHandlers, signal?: 
     handlers.onError?.(e);
     return { kind: 'error', data: e };
   } catch (err) {
-    if (timedOut) {
+    if (state.timedOut) {
       const e: SseError = { code: 'timeout', message: 'No heartbeat from SmartRouter for 45 s', can_rerun_free: true };
       handlers.onError?.(e);
       return { kind: 'error', data: e };
@@ -192,7 +198,7 @@ export async function runStream(body: RunInput, handlers: RunHandlers, signal?: 
     handlers.onError?.(e);
     return { kind: 'error', data: e };
   } finally {
-    if (watchdog !== null) window.clearTimeout(watchdog);
+    if (watchdog.id !== null) window.clearTimeout(watchdog.id);
     signal?.removeEventListener('abort', onOuterAbort);
   }
 }
