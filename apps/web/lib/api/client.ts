@@ -77,7 +77,7 @@ interface ErrorBody {
 function parseErrorBody(text: string): ErrorBody {
   try {
     const parsed: unknown = JSON.parse(text);
-    if (parsed && typeof parsed === 'object') return parsed as ErrorBody;
+    if (parsed && typeof parsed === 'object') return parsed;
   } catch {
     /* non-JSON body */
   }
