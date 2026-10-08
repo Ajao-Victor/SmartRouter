@@ -4,7 +4,13 @@ import { useEffect } from 'react';
 
 import { useRouter } from 'next/navigation';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import { micro } from '@/lib/money';
+import { openDeposit } from '@/lib/tempo/deposit';
+import { openSwapToUsdce } from '@/lib/tempo/swap';
+
+
 
 
 import { useAuth } from '@/hooks/useAuth';
