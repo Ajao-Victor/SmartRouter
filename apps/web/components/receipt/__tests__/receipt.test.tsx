@@ -50,7 +50,8 @@ describe('ReceiptView', () => {
     });
     wrap(<ReceiptView requestId="req_1" />);
     expect((await screen.findAllByText('$0.0009')).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText('$0.000818')).toBeInTheDocument();
+    // provider cost $0.000818 displays rounded to four decimals
+    expect(screen.getByText('$0.0008')).toBeInTheDocument();
     expect(screen.getByText('1.2 s')).toBeInTheDocument();
     expect(screen.getByText(/pending · settles every \$1 or hourly/)).toBeInTheDocument();
   });
