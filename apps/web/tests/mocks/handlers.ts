@@ -240,6 +240,7 @@ export const handlers = [
       quote_id: string | null;
       chat_id: string;
       model_id: string;
+      prompt?: string;
       voucher?: { channel_id: string; cumulative_amount: number; signature: string };
     };
     const chat = state.chats.get(body.chat_id);
@@ -265,6 +266,9 @@ export const handlers = [
       }
     }
 
+    if (body.prompt) {
+      appendMessage(chat.id, { role: 'user', content: body.prompt, attachments: [], model_id: null, request_id: null, result_ref: null, tokens: Math.ceil(body.prompt.length / 4), status: 'done' });
+    }
     const lastUser = [...(state.messages.get(chat.id) ?? [])].reverse().find((m) => m.role === 'user');
     const prompt = lastUser?.content ?? '';
     const scenario = { retry: /\[retry\]/i.test(prompt), fail: /\[fail\]/i.test(prompt), slow: /\[slow\]/i.test(prompt) };
