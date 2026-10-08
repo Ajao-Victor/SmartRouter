@@ -11,7 +11,7 @@ import { chip, withReduced } from '@/lib/motion/variants';
 
 const chipStyles = cva(
   [
-    'inline-flex h-9 items-center gap-1.5 rounded-pill px-3.5 text-sm font-medium select-none',
+    'inline-flex h-9 items-center gap-1.5 rounded-pill px-3.5 text-sm font-medium select-none [@media(pointer:coarse)]:min-h-11',
     'glass text-text-1 transition-[box-shadow,color,background-color] duration-200',
     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
     'selected:text-text-0',
