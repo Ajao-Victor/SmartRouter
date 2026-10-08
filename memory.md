@@ -41,11 +41,13 @@
 | Docs suite (12 files) | ✅ generated Oct 8, 2026 |
 | Phase 0 Alignment | ⬜ |
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
-| Phase 2 Core UI | 🟡 Task 9 done (Oct 8, 2026); Tasks 10–17 next |
+| Phase 2 Core UI | 🟡 Tasks 9–10 done (Oct 8, 2026); Tasks 11–17 next |
 | Phase 3 Integration | ⬜ |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 10 (2026-10-08) — landing page (`components/landing/`, `app/page.tsx`).** `Hero` (verbatim PDF pitch with word-by-word blur reveal, first two words in the beam gradient, 220 px floating RouterOrb, MagneticButton "Start a task" → `/chat`, glass "Sign in with passkey" with a loading state for Task 18). `SavingProof` (two HoloCards — GLM 5.3 Flash $0.0008 teal / Claude Opus 5.5 $0.026 — prices tick up on viewport entry, a teal GlowTrail is drawn from the cheap card to the verbatim "80% of the best quality at 1/34 of the price" line, Attribution beneath). `TaskChips` (seven PDF categories, burst + `router.push('/chat?category=…')`). `ProofStrip` ("10 providers · ~40 models · paid per use on Tempo via MPP" + looping marquee of the ten providers labelled "available via MPP"). `ComingSoonTeasers` (dashed HoloCards for Naira via Paystack and MPP Credits that open the waitlist dialog; keyboard-accessible). Page header/footer with attribution and the USDC.e-only line. Verified: lint, typecheck, 87 tests (21 files).
 
 - **Task 9 (2026-10-08) — mock API layer (`tests/mocks/`).** MSW 2.15 added. `fixtures.ts`: demo user (NG, balanced, $2 allocation, $10/week, auto-free on), open $2 session, 14 models across all 10 PDF providers with Oct 7 prices (GLM 5.3 Flash $0.0008, Claude Opus 5.5 $0.026, Llama 3.3 70B $0.0007, gpt-oss-120b $0.0002, Sonar, FLUX, StableStudio, Suno ~$0.105, Free · Llama 3.1 8B). `state.ts`: in-memory chats/messages/quotes/sessions/requests/jobs/free usage, keyword classifier (PDF task types), price = est × context scale + 10% rounded up to $0.0001, 5-min quotes, settlement tx hash on 2nd receipt poll, jobs queued→running→done over 3 polls, seeded demo chat. `handlers.ts`: every proposed route + streaming `/run` (SSE meta/token/heartbeat/retry/file/job/done/error; 409 quote_expired, 402 allocation_exceeded / free_quota_exhausted / session_closed; prompt hooks `[retry]` `[fail]` `[slow]`; writes messages/receipts/voucher totals). Slider-weighted mock ranker returns top 2 + best quality + free with PDF-style reasons. `browser.ts`/`server.ts` entries; `MockProvider` boots the worker when `NEXT_PUBLIC_MOCK=1` and holds rendering until active; `public/mockServiceWorker.js`. Verified: lint, typecheck, 87 tests (21 files).
 
@@ -69,6 +71,8 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | CTAs are buttons that `router.push`, not Links inside buttons | Avoids nested interactive elements; MagneticButton stays a real button |
+| 2026-10-08 | Sign-in CTA shows a toast until Task 18 | Keeps the landing demoable on mocks without a fake auth flow |
 | 2026-10-08 | Mock defaults to signed-in with an open $2 session | Lets the chat workspace be previewed immediately; logout/verify flip `state.authed` |
 | 2026-10-08 | Scenario hooks live in the prompt text (`[retry]`, `[fail]`, `[slow]`) | No UI toggles needed to demo failure rules from the PDF |
 | 2026-10-08 | `(app)/layout.tsx` stays a server component and delegates to a client `AppShell` | Auth state is client-only (httpOnly cookie on the API origin), so the gate must run in the browser |
@@ -117,6 +121,8 @@
 
 ## Assumptions currently in code
 
+- Landing `SavingProof` numbers are PDF constants, not fetched; the live quote panel (Task 13) uses API prices.
+
 - Mock `/run` reads the latest user message for scenario hooks, so the app must append the user message before calling `/run` (it does from Task 21).
 
 - `AppShell` treats only `unauthorized` as a redirect; `network` errors show an inline alert so offline users don't bounce to the landing page.
@@ -142,6 +148,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 10** (5 landing components, page, tests; IntersectionObserver stub). No new packages. Next: "execute task 11".
 
 - **2026-10-08** — Executed **Task 9** (MSW mocks: fixtures, state, SSE, handlers, entries, MockProvider, 5 handler tests). Added `msw`. Next: "execute task 10".
 
