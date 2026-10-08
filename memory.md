@@ -41,11 +41,13 @@
 | Docs suite (12 files) | ✅ generated Oct 8, 2026 |
 | Phase 0 Alignment | ⬜ |
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
-| Phase 2 Core UI | 🟡 Tasks 9–12 done (Oct 8, 2026); Tasks 13–17 next |
+| Phase 2 Core UI | 🟡 Tasks 9–13 done (Oct 8, 2026); Tasks 14–17 next |
 | Phase 3 Integration | ⬜ |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 13 (2026-10-08) — recommendation panel (`components/recommend/`).** `hooks/useQuote` (mutation to `POST /api/chats/:id/quote`; caches by chat/prompt-hash/model/slider with 5-min GC; `isQuoteExpired`). `PresetSlider` (ui Slider with Cheapest/Balanced/Best quality detents + weights tooltip (0.2,0.7,0.1)/(0.45,0.4,0.15)/(0.8,0.1,0.1)). `QualityPriceSpeedBars` (three bars grow on the soft spring). `TypeLine` (12 ms/char typed reason). `ClassificationTags` (task · short/long · language · needs web). `SuggestionChip` (shimmering "This looks like {task} — try {model}" with Switch/Dismiss — suggest, never force). `ModelCard` (HoloCard option: label, "via MPP"/free, PriceTag, speed bolts + web globe, typed reason, bars, Top pick/Best quality/Free badges as spans, compare checkbox). `RecommendationPanel` (AnimatePresence + stagger; tags, Auto button, slider with 300 ms debounced re-quote, four cards with `reorderLayout` on the glide spring, horizontal snap row on mobile → 2×2 → row of 4, suggestion, Attribution; `cardRef` registry for GlowTrail targets). `lib/useDebouncedCallback`. Verified: lint, typecheck, 98 tests (25 files).
 
 - **Task 12 (2026-10-08) — Composer.** `Composer` (FloatingDock that lifts on focus and shakes on `cooldownKey`; auto-growing textarea to 6 rows; ⌘/Ctrl+Enter; attachment picker with the security.md allowlist, rejection toasts, removable chips; `ModelPill`; Compare chip behind `NEXT_PUBLIC_FLAG_COMPARE`; `RunButton`). `RunButton` (MagneticButton: "Get quote" when unquoted; "Run · $price" with `QuoteRing` when quoted; green when free; teal/green burst on tap; parent owns the GlowTrail). `QuoteRing` (SVG countdown over the 5-minute TTL, amber ≤ 60 s, `onExpired` at 0, `role=timer`). `ModelPill` ("{label} · via MPP" / "Free · Llama 3.1 8B" / "Auto · top pick"; `layoutId` crossfade; opens the picker). `ModelPicker` (Sheet: recommended HoloCards for the prompt, then the catalog grouped by provider labelled "available via MPP", search). `hooks/useModels`. Verified: lint, typecheck, 95 tests (24 files).
 
@@ -75,6 +77,8 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | Badges and tags that are not actionable render as spans / non-focusable chips | Avoids phantom buttons for assistive tech |
+| 2026-10-08 | Slider re-quote is debounced inside the panel (300 ms) | Protects the 402 reads from slider scrubbing (security.md §9) |
 | 2026-10-08 | Composer is controlled by `composerStore` (draft/attachments) and emits `onGetQuote(prompt)` / `onRun()`; quoting and running live in the workspace (Task 21) | Keeps the dock reusable for new-chat and chat modes |
 | 2026-10-08 | `?first=1` marks a chat created from a description; the workspace (Task 21) auto-fires the first quote from the stored draft | Matches the PDF: the description is quoted immediately so the user can run it straight away |
 | 2026-10-08 | CTAs are buttons that `router.push`, not Links inside buttons | Avoids nested interactive elements; MagneticButton stays a real button |
@@ -127,6 +131,8 @@
 
 ## Assumptions currently in code
 
+- Price/speed bar scores are derived client-side from the four options (cheapest = 1); quality comes from the API's rescaled `quality` field.
+
 - Landing `SavingProof` numbers are PDF constants, not fetched; the live quote panel (Task 13) uses API prices.
 
 - Mock `/run` reads the latest user message for scenario hooks, so the app must append the user message before calling `/run` (it does from Task 21).
@@ -154,6 +160,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 13** (useQuote, PresetSlider, bars, TypeLine, tags, SuggestionChip, ModelCard, RecommendationPanel, tests). No new packages. Next: "execute task 14".
 
 - **2026-10-08** — Executed **Task 12** (Composer, RunButton, QuoteRing, ModelPill, ModelPicker, useModels, 2 test files). No new packages. Next: "execute task 13".
 
