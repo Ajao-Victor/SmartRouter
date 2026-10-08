@@ -75,6 +75,11 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }];
   },
+  webpack(config: { ignoreWarnings?: unknown[] }) {
+    // Sentry's OpenTelemetry hooks use dynamic require(); the warning is benign for this app.
+    config.ignoreWarnings = [...(config.ignoreWarnings ?? []), { module: /require-in-the-middle|import-in-the-middle|@opentelemetry/ }];
+    return config;
+  },
 };
 
 export default nextConfig;
