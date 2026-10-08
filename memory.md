@@ -40,12 +40,14 @@
 |---|---|
 | Docs suite (12 files) | ✅ generated Oct 8, 2026 |
 | Phase 0 Alignment | ⬜ |
-| Phase 1 Setup | 🟡 Tasks 1–7 done (Oct 8, 2026); Task 8 next |
+| Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
 | Phase 2 Core UI | ⬜ |
 | Phase 3 Integration | ⬜ |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 8 (2026-10-08) — app shell.** `app/providers.tsx` (QueryClient: staleTime 30 s, no retry on unauthorized/validation, else 1; PreferencesProvider; RouterField; GlowTrailLayer; ParticleLayer; Toaster). Root layout = Providers + `TestnetBanner` (striped strip when `NEXT_PUBLIC_TEMPO_NETWORK=testnet`). `hooks/useMe` (`/api/me`, flags `isUnauthenticated`/`isOffline`). `TopBar` (sticky glass, 28 px RouterOrb logo with heartbeat `pulseKey`, beam wordmark, GlitchText chat title, right slot for the HUD, wallet toggle → `uiStore.toggleWallet`). `AppShell` (client gate: 401 → `router.replace('/')`, skeleton while pending, offline alert, `pb-32` for the dock). Route group `(app)` with placeholder `chat`, `chat/[chatId]`, `settings`. Verified: lint, typecheck, 82 tests (20 files).
 
 - **Task 7 (2026-10-08) — FX layer (`components/fx/`).** `GlitchText` (base blur-in + two hue-shifted clip-path slices tearing for 600 ms, sr-only text for AT, plain text under reduced motion). `HoloCard` (glass/dashed card, `useTilt` ±8° on magnet springs, pointer-following radial spotlight via `useMotionTemplate`, rotating conic beam ring when selected, holoCard/teal/free variants). `LiquidRing` (SVG meter: liquid rect on the liquid spring, surface wobble from animated `feTurbulence` seed + `feDisplacementMap`, colour by `data-state` → `--ring`, hud variants ok/low/used/toppingUp). `GlowTrail` (`useGlowTrail()` draws a gradient beam through element centres as quadratic curves; `pathLength` 0→1 then fade; `GlowTrailLayer` fixed SVG at z-dock; ≤4 trails). `ParticleBurst` (`ParticleLayer` singleton canvas 2D at DPR ≤1.5, ≤120 particles, gravity + glow; `useParticleBurst()` + `burstAt(e)`; no-op under reduced motion). `FloatingDock` (glass dock on `dock-float`, lift on focus, drag up 24 px with snap-to-origin, cooldown shake on `shakeKey`). `RouterOrb` (R3F `MeshTransmissionMaterial` icosahedron + emissive core + teal nucleus, rotation/breathing scale by activity, one-shot pulse on `pulseKey`; CSS radial orb with pulseLoop fallback). `RouterField` (R3F points 12k desktop / 4k mobile displaced by GLSL simplex noise with `uTime/uActivity/uMouse`, additive soft-disc fragments, six dashed lanes animated by shifting `lineDistance`; always layered over the CSS field fallback + grid + noise; pauses on hidden tab / SDK dialog). `stores/fxStore` bus. Root layout mounts RouterField, GlowTrailLayer, ParticleLayer. Dev gallery `/dev/fx`. Verified: lint, typecheck, 81 tests (19 files), build (home 149 kB first-load; R3F scenes in lazy chunks; `/dev/fx` 168 kB).
 
@@ -65,6 +67,7 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | `(app)/layout.tsx` stays a server component and delegates to a client `AppShell` | Auth state is client-only (httpOnly cookie on the API origin), so the gate must run in the browser |
 | 2026-10-08 | Lane dashes animate by offsetting the `lineDistance` attribute rather than `LineDashedMaterial.dashOffset` | `dashOffset` is not in the three 0.170 typings; attribute shift is portable |
 | 2026-10-08 | GlitchText exposes an `sr-only` copy and hides the animated layers | `role="text"` is not a valid ARIA role; one accessible copy, decorative layers |
 | 2026-10-08 | FX imperative APIs (trails, bursts) go through `fxStore` with singleton layers mounted in the root layout | Any component can fire effects without prop-drilling refs; one canvas, one SVG |
@@ -110,6 +113,8 @@
 
 ## Assumptions currently in code
 
+- `AppShell` treats only `unauthorized` as a redirect; `network` errors show an inline alert so offline users don't bounce to the landing page.
+
 - `RouterFieldScene` point count is chosen by viewport width at mount (≥1024 → 12k, else 4k); not re-evaluated on resize.
 - Orb/field activity comes from `streamStore.selectActivity` (share of live streams); will read real SSE state from Task 21.
 
@@ -131,6 +136,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 8** (shell/providers/TopBar/AppShell/placeholders, 1 test). No new packages. Next: "execute task 9".
 
 - **2026-10-08** — Executed **Task 7** (12 FX source files, 4 test files, dev gallery, 4 follow-up fixes). No new packages. Dev-server command given to the user; builds skipped while :3000 is in use. Next: "execute task 8".
 
