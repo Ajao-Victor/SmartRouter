@@ -33,12 +33,12 @@ export function AppShell({ children, title, right }: AppShellProps) {
   const router = useRouter();
   const me = useMe();
   const settings = useSettings();
-  const auth = useAuth();
+  const { restore } = useAuth();
   useSession(Boolean(me.data));
 
   useEffect(() => {
-    void auth.restore();
-  }, [auth.restore]);
+    void restore();
+  }, [restore]);
 
   useEffect(() => {
     if (me.isUnauthenticated) router.replace('/');
