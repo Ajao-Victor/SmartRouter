@@ -38,7 +38,7 @@ export function ReceiptView({ requestId }: { requestId: string }) {
       </div>
     );
   }
-  if (receipt.isError || !receipt.data) {
+  if (receipt.isError) {
     return <p role="alert" className="text-sm text-signal">Could not load this receipt.</p>;
   }
   const r = receipt.data;
