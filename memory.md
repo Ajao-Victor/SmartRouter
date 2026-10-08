@@ -42,10 +42,12 @@
 | Phase 0 Alignment | ⬜ |
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
 | Phase 2 Core UI | ✅ Tasks 9–17 done (Oct 8, 2026) |
-| Phase 3 Integration | 🟡 Tasks 18–20 done (Oct 8, 2026); Tasks 21–25 next |
+| Phase 3 Integration | 🟡 Tasks 18–21 done (Oct 8, 2026); Tasks 22–25 next |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 21 (2026-10-08) — quote → allocation check → voucher → `/run` SSE.** `lib/api/sse.ts` (`runStream`: fetch + ReadableStream POST, SSE frame parser, Zod-validated `meta/token/heartbeat/retry/file/job/done/error`, 45 s heartbeat watchdog → `timeout`, abort cancels the reader; outcomes done/error/aborted). `hooks/useRun` (PDF steps 6–11: pick the recommendation (Auto = top paid pick), quote freshness → `needs_requote`, allocation check via `selectCanAfford` → auto-free ("Allocation used — continuing free") or `needs_top_up`, `no_allocation`, `free_exhausted`; optimistic user + assistant messages; `signerStore.advance` + `SessionClient.signVoucher` cumulative voucher; stream events → `streamStore`; on done: `applyVoucher`, record content/request/model, invalidate session/chats/free usage; no result → `restoreVoucher` + signer rollback, error state with rerun-free; 429 → cooldown shake; `rerunFree`). `ChatWorkspace` (Thread + TopUpBar (Top up re-runs after success; Continue free forces free) + RecommendationPanel (slider re-quote, pick/Auto run, suggestion re-quote, card refs) + ModelPicker (PATCH current model + re-quote) + Composer (stale draft → Get quote; quote ring expiry → re-quote); GlowTrail Run → chosen card → HUD; `?first=1` auto-quotes the stored draft; page title → TopBar via `uiStore.pageTitle`). `/run` body now carries `prompt` (server records both messages — PDF step 10); mock appends the user message. Chat route validates the id. Verified: lint, typecheck, 135 tests (38 files).
 
 - **Task 20 (2026-10-08) — spend permission + session open (`lib/tempo/session/`).** `voucherSigner` (non-extractable WebCrypto ECDSA P-256 keypair per channel, persisted in IndexedDB — never in state; `publicKeyHex` raw SPKI as `authorized_signer`; `sign`/`verify`/`adopt`/`forget`; canonical voucher bytes `${channelId}:${cumulative}` — assumption, Gaps §3.2). `SessionClient` interface (openChannel maxDeposit + authorizedSigner, topUp without close, signVoucher cumulative, status) with `MockSessionClient` (in-memory channels, real signatures, no timers) and an unwired `impl.tempo.ts` stub; `getSessionClient()` warns on mainnet. `spendPermission.ts` (scope = USDC.e token, SmartRouter payee, open+topUp calls, 30-day expiry assumption; ensure/get/revoke via the adapter). `useSpendPermission` (query + approve/revoke, `permissionStatus`). `useOpenAllocation` (permission → signer → channel → `POST /api/sessions` → stores). `useTopUp` (click-only; `beginTopUp` → client top-up → mock-only `POST /api/sessions/:id/top-up` → `endTopUp`; the real API is expected to observe the chain — Gaps §3.5). AppShell/Settings wired (HUD Open allocation / Top up with a teal burst; wallet sheet permission approve/revoke). Verified: lint, typecheck, 125 tests (36 files).
 
@@ -91,6 +93,9 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | `/run` carries the prompt (and optional attachments) instead of a separate message-create call | PDF step 10: the server saves user + assistant messages at run time; one request, one voucher |
+| 2026-10-08 | A quote is "fresh" only while the composer draft equals the quoted prompt | PDF: the quote is tied to the exact prompt; editing the draft forces Get quote |
+| 2026-10-08 | Auto = top *paid* pick when the user has an allocation | PDF: Auto runs the top pick; the free model is always the fourth option, never the auto choice |
 | 2026-10-08 | The ESLint no-timers rule for `lib/tempo/session/**` is enforced literally: even the mock has no latency simulation | PDF: no automatic top-ups; the rule protects the real client when it lands |
 | 2026-10-08 | Voucher key is generated under a draft id, then adopted under the channel id after open | The channel id is unknown until the SDK opens it, but the public key must be registered at open |
 | 2026-10-08 | Deposit/swap are plain async flows that invalidate the balance query; the UI reacts to the data change | Keeps SDK dialogs out of React state; the BalanceList splash triggers from the balance delta |
@@ -156,6 +161,9 @@
 
 ## Assumptions currently in code
 
+- SSE event payload shapes are proposed (Gaps §2.2); `can_rerun_free` defaults to false when absent.
+- `no_allocation` is surfaced as a toast pointing to the wallet; the PDF flow assumes an open allocation before paid runs.
+
 - `notifyTopUp` is a mock-only endpoint; the real flow may be chain-observed and the call becomes a no-op.
 - P-256 ECDSA with SHA-256 is assumed for the voucher signer (Gaps §3.3).
 
@@ -198,6 +206,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 21** (sse client, useRun, ChatWorkspace, chat route, prompt-in-run contract, 2 test files, 5 fixes). No new packages. Next: "execute task 22".
 
 - **2026-10-08** — Executed **Task 20** (voucher signer, SessionClient + mock + stub, spend permission, three hooks, shell/settings wiring, tests). No new packages. Next: "execute task 21".
 
