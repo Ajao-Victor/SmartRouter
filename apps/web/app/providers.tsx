@@ -12,6 +12,7 @@ import { RouterField } from '@/components/fx/RouterField';
 import { MockProvider } from '@/components/layout/MockProvider';
 import { PreferencesProvider } from '@/components/layout/PreferencesProvider';
 import { Toaster } from '@/components/ui/Toast';
+import { WaitlistDialog } from '@/components/wallet/WaitlistDialog';
 
 function makeQueryClient(): QueryClient {
   return new QueryClient({
@@ -42,6 +43,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <div className="relative z-content">
           <MockProvider>{children}</MockProvider>
         </div>
+        <WaitlistDialog />
         <GlowTrailLayer />
         <ParticleLayer />
         <Toaster />
