@@ -40,12 +40,14 @@
 |---|---|
 | Docs suite (12 files) | ✅ generated Oct 8, 2026 |
 | Phase 0 Alignment | ⬜ |
-| Phase 1 Setup | 🟡 Tasks 1–5 done (Oct 8, 2026); Tasks 6–8 next |
+| Phase 1 Setup | 🟡 Tasks 1–6 done (Oct 8, 2026); Tasks 7–8 next |
 | Phase 2 Core UI | ⬜ |
 | Phase 3 Integration | ⬜ |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 6 (2026-10-08) — UI primitives (`components/ui/`).** `Button` (cva: primary = beam gradient + accent glow + hover sheen sweep; secondary = glass; ghost; danger = deliberately plain; free = green glow; sizes sm/md/lg/icon with 44 px hit targets; hover lift on magnet spring, tap compress on snappy, spinning ring while loading). `MagneticButton` (8 px pointer pull via `useMagnetic`). `NumberTicker` (fx; snappy spring between values, `tick` lift up/down, aria-live) + `PriceTag` (mono tabular, tone price/free/neutral/signal, "Free" label at zero). `Chip` (glass pill, `chip` variants, tone glows accent/free/quality/teal/neutral, `data-selected` + `aria-pressed`). `Slider` (mechanical detents: thumb follows pointer on a motion value, snaps to nearest detent on a snappy spring, bouncy "click" on each snap, beam track teal→violet→blue, detent ticks, keyboard ←/→/Home/End, `role=slider` + valuetext). `Input`/`Textarea` (glass field, focus glow, signal glow + `shake` on error, aria-describedby). `Overlay` engine (Portal, dimmed blurred backdrop, `useFocusTrap`, Escape, body scroll lock, velocity/travel drag dismiss from `dragPhysics`, never mounts while `uiStore.sdkDialogOpen`). `Sheet` (mobile bottom sheet on liquid spring with grab handle / desktop right panel on heavy spring; z-sheet 40), `Dialog` (centred blur-in on snappy spring, accent glow; z-sheet), `Drawer` (z-drawer 30 so wallet can open above receipts). `toastStore` + `Toaster` (bouncy entrance, tone glows, top-centre mobile / bottom-right desktop, max 4, `toast.success/error/...` helpers). `Skeleton` (shimmer sweep), `Tooltip` (fadeScale), `Attribution` (verbatim licence line). Support: `lib/a11y/useFocusTrap`, `lib/useMediaQuery` (`useSyncExternalStore`, server = mobile), `components/ui/Portal`. Dev gallery `/dev/primitives`. Verified: lint, typecheck, 72 tests (15 files), build (gallery 158 kB first-load).
 
 - **Task 5 (2026-10-08) — state management.** Six Zustand slices in `stores/`: `uiStore` (dialog stack, wallet sheet, compare mode, `theme`, `forceReducedMotion`, `sdkDialogOpen`, `hydrated`; persists only theme + reduced-motion to IndexedDB via `persist` + `skipHydration`), `composerStore` (draft, attachments with MIME allowlist / 10 MB placeholder / max 4, category, slider override, selected model, compare slots), `allocationStore` (mirrors `user_sessions`: deposit, remaining = deposit − highest_voucher, status none/open/used/toppingUp/closed, `applyVoucher`/`restoreVoucher`/top-up cycle; selectors `remainingPct`, `isLow` < 25%, `isUsed`, `canAfford`), `signerStore` (public key, channel, cumulative total, deposit cap; `advance()` throws `VoucherCapError` above the deposit; `rollback()`; no key material), `streamStore` (per-message token buffers, status idle/streaming/done/error/retrying, heartbeat, retry, file, job; `selectActivity` 0..1 for the orb/field), `walletStore` (SDK status idle→initialising→connecting→signing→connected/error, address, `sessionReady`; balances deliberately excluded). `stores/index.ts` exports `resetAllStores()` for logout. `lib/idb.ts`: fail-safe IndexedDB KV + Zustand async storage adapter. `components/layout/PreferencesProvider.tsx`: rehydrates `uiStore` after mount, flips `hydrated`, applies `data-theme` to `<html>`, feeds `forceReducedMotion` into `ReducedMotionProvider`. Verified: lint, typecheck, 59 tests (11 files), build.
 
@@ -61,6 +63,11 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | One `Overlay` engine behind Sheet/Dialog/Drawer | Focus trap, Escape, scroll lock, drag dismiss and the SDK-dialog guard are written once |
+| 2026-10-08 | `Slider` is a generic detent primitive; Task 13 wraps it with preset labels/weights | Same mechanical feel reusable for Settings default slider |
+| 2026-10-08 | `NumberTicker` moved up from Task 7 into Task 6 | PriceTag depends on it |
+| 2026-10-08 | Danger buttons have no spring lift/glow | design.md §6: destructive actions are not gamified |
+| 2026-10-08 | Media query server snapshot is `false` (mobile) | Mobile-first; desktop upgrades after hydration without mismatch |
 | 2026-10-08 | Preferences persist to IndexedDB through Zustand `persist` with `skipHydration: true`; `PreferencesProvider` calls `rehydrate()` after mount | `localStorage` is banned by rules/lint; server and first paint render defaults so there is no hydration mismatch |
 | 2026-10-08 | Wallet balances are never in a store; only SDK connection status is (`walletStore`) | PDF: balances are read live from Tempo, never stored |
 | 2026-10-08 | `signerStore.advance()` reserves before signing and throws at the deposit cap; `rollback()` only for runs with no result | Cumulative voucher safety (security.md §3) |
@@ -115,6 +122,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08 (session 7)** — Executed **Task 6** (17 primitives/support files, 4 test files, dev gallery). No new packages. Next: "execute task 7" (FX layer: GlitchText, HoloCard, LiquidRing, GlowTrail, ParticleBurst, FloatingDock, RouterOrb, RouterField).
 
 - **2026-10-08 (session 6)** — Executed **Task 5** (six stores, IndexedDB helper, PreferencesProvider, 22 new tests). No new packages. Next: "execute task 6" (UI primitives).
 
