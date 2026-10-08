@@ -10,7 +10,7 @@
 
 ## Phase 1 — Setup
 
-### Task 1 — Scaffold `apps/web` with the toolchain  `todo`
+### Task 1 — Scaffold `apps/web` with the toolchain  `done` (2026-10-08; commits: 52669c6 228b9b6 fae8670 4f4f4df 4fe6d83 7208605 48ec56d f7d2f58 6c54786 53597ee c5568d8 9a06668 3184654 f53484e 9854ad8 84aed74 5973fcc 4bad8f7 94b26b6 da6bc9d)
 **Goal:** a Next.js App Router app that boots inside the pnpm workspace with the full dependency set.
 **Files to create**
 - `pnpm-workspace.yaml` (root, if absent): `packages: ['apps/*', 'packages/*']`
