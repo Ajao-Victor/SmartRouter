@@ -185,9 +185,9 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
 
       <ThreadNotes
         chatTask={chat.data.task_type}
-        turnTask={quoteFresh && quoteData ? quoteData.classification.task_type : null}
+        turnTask={quoteFresh ? quoteData.classification.task_type : null}
         hasSummary={chat.data.summary !== null}
-        contextTokens={quoteFresh && quoteData ? quoteData.quote.context_tokens : null}
+        contextTokens={quoteFresh ? quoteData.quote.context_tokens : null}
       />
 
       <RecommendationPanel
