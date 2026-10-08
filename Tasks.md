@@ -251,7 +251,7 @@
 - Replace stubs in `DepositButton`, `SwapButton`; trigger Deposit splash when USDC.e increases.
 **Acceptance:** on testnet, deposit dialog opens over the page; balance updates after close; swap button appears only when a non-USDC.e balance exists.
 
-### Task 20 — Spend permission and session open (SessionClient)  `todo`
+### Task 20 — Spend permission and session open (SessionClient)  `done` (2026-10-08; commits: f6b3bb5 ce0241c a95ac30 6d6dc42 0bc42fb bac0c3b 11045b5 8d6785a 67a5c28 2c50f96 9f712b4 374d7a0 4ea48b5 6c35453 dff170f b19dca8 8ed7fd8 5c05f35 111216b 1da23dd de80dd2 b1a6547 2e694cc 7a6cb47)
 **Files**
 - `lib/tempo/session/SessionClient.ts` — interface: `openChannel({maxDepositMicro, authorizedSigner}) → {channelId}`, `topUp({channelId, amountMicro})`, `signVoucher({channelId, cumulativeMicro}) → signature`, `status(channelId)`.
 - `lib/tempo/session/voucherSigner.ts` — WebCrypto non-extractable keypair; persisted in IndexedDB (`idb-keyval`-style minimal helper in `lib/idb.ts`) keyed by channel id; `getOrCreate()`, `publicKey()`, `sign(bytes)`, `forget()`.
