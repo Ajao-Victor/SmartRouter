@@ -22,6 +22,7 @@ import { useSettings } from '@/hooks/useSettings';
 import { useSpendPermission } from '@/hooks/useSpendPermission';
 import { useTopUp } from '@/hooks/useTopUp';
 import { toast } from '@/stores/toastStore';
+import { useUiStore } from '@/stores/uiStore';
 
 import { AllocationHUD } from '@/components/allocation/AllocationHUD';
 import { burstAt, useParticleBurst } from '@/components/fx/ParticleBurst';
@@ -45,6 +46,7 @@ export function AppShell({ children, title, right }: AppShellProps) {
   const me = useMe();
   const settings = useSettings();
   const { restore } = useAuth();
+  const pageTitle = useUiStore((s) => s.pageTitle);
   const qc = useQueryClient();
   const balance = useBalance(Boolean(me.data));
   const permission = useSpendPermission(Boolean(me.data));
@@ -90,7 +92,7 @@ export function AppShell({ children, title, right }: AppShellProps) {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <TopBar {...(title !== undefined ? { title } : {})} right={right ?? (me.data ? hud : null)} />
+      <TopBar title={title ?? pageTitle} right={right ?? (me.data ? hud : null)} />
       {me.data && (
         <WalletSheet
           address={me.data.tempo_address}
