@@ -30,7 +30,7 @@
 **Animations:** none.
 **Acceptance:** `pnpm install` succeeds; `pnpm dev` serves the placeholder; `pnpm check` and `pnpm guard:hosts` pass. One commit per file.
 
-### Task 2 — Env validation, money helpers, API client  `todo`
+### Task 2 — Env validation, money helpers, API client  `done` (2026-10-08; commits: 38cfa94 22cef1b 2fd7e0b abb864b c420119 6d347e9 20d30dd 0e63837 b6edce6 1c2bd55)
 **Files**
 - `lib/env.ts` — Zod schema for all `NEXT_PUBLIC_*`; export `env`; throw at import if invalid. `network: 'testnet'|'mainnet'`; flags as booleans.
 - `lib/money.ts` — `type MicroUsd`; `micro(n: number): MicroUsd`; `formatUsd(m, {min?:2, max?:4})` → `$0.0008`; `roundUpToTenThousandth(m)` (PDF: prices rounded **up** to $0.0001 = 100 micro-USD); `pct(a,b)`; `ratioLabel(cheap, best)` → `"1/34"` (floor of best/cheap); `savingLine(qualityPct, ratio)` → `"80% of the best quality at 1/34 of the price"`.
