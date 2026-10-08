@@ -20,3 +20,29 @@ if (!w.matchMedia) {
 if (typeof HTMLCanvasElement !== 'undefined') {
   HTMLCanvasElement.prototype.getContext = () => null;
 }
+
+// jsdom lacks IntersectionObserver (motion's useInView); treat everything as in view.
+if (typeof globalThis.IntersectionObserver === 'undefined') {
+  class IO {
+    readonly root = null;
+    readonly rootMargin = '';
+    readonly thresholds: readonly number[] = [];
+    private readonly cb: IntersectionObserverCallback;
+    constructor(cb: IntersectionObserverCallback) {
+      this.cb = cb;
+    }
+    observe(target: Element) {
+      this.cb([{ isIntersecting: true, target } as IntersectionObserverEntry], this as unknown as IntersectionObserver);
+    }
+    unobserve() {
+      /* noop */
+    }
+    disconnect() {
+      /* noop */
+    }
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
+  }
+  globalThis.IntersectionObserver = IO as unknown as typeof IntersectionObserver;
+}
