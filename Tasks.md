@@ -232,7 +232,7 @@
 
 ## Phase 3 — Web3 and backend integration
 
-### Task 18 — Tempo Accounts SDK sign-in + SIWE + session cookie  `todo`
+### Task 18 — Tempo Accounts SDK sign-in + SIWE + session cookie  `done` (2026-10-08; commits: bf4d356 97e1a6d 034a7aa a94713d 8ccf5d1 b06b367 950727f 2d7a2c0 c4494cb 7f1f5e0 5460c4e 0e4dcc9)
 **Files**
 - `lib/tempo/accounts.ts` — initialise the **Tempo Accounts SDK** with the **Tempo Wallet adapter**; network from env; export `getAccount()`, `signIn()` (passkey dialog over the page), `signOut()`, `onDialogOpen/Close` → `uiStore.setSdkDialogOpen` (pauses WebGL).
 - `lib/tempo/siwe.ts` — build SIWE message (domain, address, nonce from `GET /api/auth/nonce`, chain id); sign via SDK (passkey or plain wallet); `POST /api/auth/verify` (proposed) → cookie.
