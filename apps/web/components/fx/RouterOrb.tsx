@@ -68,8 +68,7 @@ export function RouterOrb({ size = 48, activity, pulseKey = 0, className }: Rout
           'radial-gradient(circle at 35% 30%, #c9bfff 0%, #7c5cff 35%, #2a1f6e 70%, #05060a 100%)',
         boxShadow: `0 0 ${String(Math.round(size * 0.6))}px -${String(Math.round(size * 0.15))}px var(--accent), inset 0 0 ${String(Math.round(size * 0.25))}px var(--accent-2)`,
       }}
-      variants={reduced ? undefined : pulseLoop}
-      animate={reduced ? undefined : a > 0.1 ? 'active' : 'idle'}
+      {...(reduced ? {} : { variants: pulseLoop, animate: a > 0.1 ? 'active' : 'idle' })}
     >
       <span className="absolute inset-[30%] rounded-full bg-accent-2 opacity-80 blur-[2px]" />
     </motion.div>
