@@ -352,7 +352,13 @@ export const runInputSchema = z.object({
   quote_id: z.string().nullable(),
   chat_id: z.string(),
   model_id: z.string(),
+  /** The user's turn; the server records user + assistant messages (PDF lifecycle step 10). */
+  prompt: z.string(),
+  attachments: z.array(attachmentSchema).optional(),
   /** Omitted on free-model turns (PDF: free turns skip payment). */
   voucher: voucherSchema.optional(),
 });
+
+/** Default free model id (PDF: Llama 3.1 8B on Cloudflare Workers AI); the API's `is_free` option wins when present. */
+export const FREE_MODEL_ID_DEFAULT = 'cloudflare:llama-3.1-8b';
 export type RunInput = z.input<typeof runInputSchema>;
