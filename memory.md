@@ -43,9 +43,11 @@
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
 | Phase 2 Core UI | ✅ Tasks 9–17 done (Oct 8, 2026) |
 | Phase 3 Integration | ✅ Tasks 18–25 done (Oct 8, 2026) |
-| Phase 4 Polish | 🟡 Tasks 26–28 done (Oct 8, 2026); Task 29 next |
+| Phase 4 Polish | ✅ Tasks 26–29 done (Oct 8, 2026) — all 29 tasks complete |
 
 ## Completed features
+
+- **Task 29 (2026-10-08) — README, PWA manifest, final ledger.** Root `README.md` (pitch, ASCII money-flow diagram from `architecture.md` §1, repo map, run/check commands incl. e2e recording, feature flags, LMArena CC-BY-4.0 / Artificial Analysis attribution, free-model sponsorship note). PWA: `public/manifest.webmanifest` (standalone, portrait, `#05060a`, shortcuts New chat / Settings), icons under `public/icons/` (router-orb SVG + maskable SVG, PNGs 192/512/maskable/apple-touch rasterised from the SVGs with Chromium), linked from the root layout (`manifest`, `icons`, `appleWebApp`); no service worker (MSW's worker is dev-only; offline shell is a later PDF item). `Tasks.md`: all 29 statuses `done` with commit lists. Verified: lint, typecheck, 145 tests, guard:hosts, production build (`scripts/ci.sh`).
 
 - **Task 28 (2026-10-08) — e2e demo path and rehearsal.** `tests/e2e/demo.spec.ts` walks the PDF path on mocks — sign in → deposit ($12.50 → $14.50) → Open allocation · $2 (mock approval → channel → `POST /api/sessions`, HUD "Allocation: $2.00 remaining of $2.00") → task → four options with attribution → Auto run → "via MPP" reply with Receipt → receipt drawer shows the session → HUD Top up $2 → "Topped up". Passes on the `mobile` (Pixel 7) and `desktop` (1280×800) projects; `playwright.config.ts` boots `next dev -p 3100` with `NEXT_DIST_DIR=.next-e2e` so it never collides with `pnpm dev`. `E2E_VIDEO=1` / `pnpm test:e2e:record` records the desktop walk-through (≈ 70 s, ≈ 10 MB webm under `test-results/`, gitignored) as the timing reference; `docs/demo-script.md` has the 3-minute choreography plus rehearsal notes. Fixes found by the rehearsal: multi-keyframe variants use tweens (springs only take two keyframes); the browser mock now starts with **no allocation** so the demo opens one and the browser holds the voucher signer (the seeded open session made every paid run fail with "No allocation signer"); Next's tsconfig rewrite stopped by including the `.next-build`/`.next-e2e` type dirs. Verified: lint, typecheck, 145 tests (43 files), e2e 2/2 (twice).
 
@@ -240,6 +242,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 29** (root README, manifest + icons, layout metadata, final statuses). No new packages. **All 29 tasks complete.** Remaining before submission: manual Lighthouse pass, real-take demo video, backend answers in `Backend_Gaps_Report.md`, then swap mocks for the live API (`NEXT_PUBLIC_MOCK=0`, Tempo SDK origins in CSP).
 
 - **2026-10-08** — Resumed after a terminal crash: audited git (six post-Task-27 commits were Task 28 work in progress), committed the dangling tsconfig change, then executed **Task 28** (e2e passes mobile + desktop, recording mode, mock seeds no allocation, demo-script rehearsal notes). No new packages. Next: "execute task 29".
 
