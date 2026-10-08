@@ -41,11 +41,13 @@
 | Docs suite (12 files) | ✅ generated Oct 8, 2026 |
 | Phase 0 Alignment | ⬜ |
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
-| Phase 2 Core UI | 🟡 Tasks 9–10 done (Oct 8, 2026); Tasks 11–17 next |
+| Phase 2 Core UI | 🟡 Tasks 9–11 done (Oct 8, 2026); Tasks 12–17 next |
 | Phase 3 Integration | ⬜ |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 11 (2026-10-08) — chat list + new chat.** `hooks/useChats` (list query; `useCreateChat` mutation prepends to the cache). `ChatList` (stagger of tilting HoloCard rows: GlitchText title, task chip, `PriceTag` spend with Free label, message count; keyboard-navigable `role=link`). `NewChat` (seven PDF category chips bound to `composerStore.category`, "Or describe the task" textarea with ⌘/Ctrl+Enter, MagneticButton "Start chat" / "Get a quote"; a description creates the chat with `first_prompt`, stores the draft and routes to `/chat/:id?first=1` so the workspace auto-quotes it — PDF: classified and quoted as the first prompt). New-chat page reads `?category=` (Zod-validated) inside a Suspense boundary and lists recent chats. Fixed `apiFetch`'s schema generic (`ZodType<T, ZodTypeDef, unknown>`) so branded micro-USD survives inference. Verified: lint, typecheck, 91 tests (22 files).
 
 - **Task 10 (2026-10-08) — landing page (`components/landing/`, `app/page.tsx`).** `Hero` (verbatim PDF pitch with word-by-word blur reveal, first two words in the beam gradient, 220 px floating RouterOrb, MagneticButton "Start a task" → `/chat`, glass "Sign in with passkey" with a loading state for Task 18). `SavingProof` (two HoloCards — GLM 5.3 Flash $0.0008 teal / Claude Opus 5.5 $0.026 — prices tick up on viewport entry, a teal GlowTrail is drawn from the cheap card to the verbatim "80% of the best quality at 1/34 of the price" line, Attribution beneath). `TaskChips` (seven PDF categories, burst + `router.push('/chat?category=…')`). `ProofStrip` ("10 providers · ~40 models · paid per use on Tempo via MPP" + looping marquee of the ten providers labelled "available via MPP"). `ComingSoonTeasers` (dashed HoloCards for Naira via Paystack and MPP Credits that open the waitlist dialog; keyboard-accessible). Page header/footer with attribution and the USDC.e-only line. Verified: lint, typecheck, 87 tests (21 files).
 
@@ -71,6 +73,7 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | `?first=1` marks a chat created from a description; the workspace (Task 21) auto-fires the first quote from the stored draft | Matches the PDF: the description is quoted immediately so the user can run it straight away |
 | 2026-10-08 | CTAs are buttons that `router.push`, not Links inside buttons | Avoids nested interactive elements; MagneticButton stays a real button |
 | 2026-10-08 | Sign-in CTA shows a toast until Task 18 | Keeps the landing demoable on mocks without a fake auth flow |
 | 2026-10-08 | Mock defaults to signed-in with an open $2 session | Lets the chat workspace be previewed immediately; logout/verify flip `state.authed` |
@@ -148,6 +151,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 11** (useChats, ChatList, NewChat, page, tests; apiFetch generic fix). No new packages. Next: "execute task 12".
 
 - **2026-10-08** — Executed **Task 10** (5 landing components, page, tests; IntersectionObserver stub). No new packages. Next: "execute task 11".
 
