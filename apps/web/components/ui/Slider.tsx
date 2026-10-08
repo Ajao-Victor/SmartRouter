@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import clsx from 'clsx';
-import { motion, useMotionValue, useSpring } from 'motion/react';
+import { motion, useMotionValue, useSpring, useTransform } from 'motion/react';
 
 import { springValues } from '@/lib/motion/springs';
 import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';
@@ -39,6 +39,7 @@ export function Slider({ detents, value, onChange, className, disabled = false, 
 
   const pct = useMotionValue(pctFor(value));
   const springPct = useSpring(pct, springValues.snappy);
+  const thumbLeft = useTransform(springPct, (v) => `${String(v)}%`);
   const [dragging, setDragging] = useState(false);
   const [clickKey, setClickKey] = useState(0);
 
@@ -150,7 +151,7 @@ export function Slider({ detents, value, onChange, className, disabled = false, 
         <motion.div
           aria-hidden="true"
           className="absolute top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full bg-bg-1 shadow-glow-accent-strong"
-          style={{ left: springPct.get() === 0 && reduced ? `${String(pctFor(value))}%` : undefined, x: 0 }}
+          style={{ left: thumbLeft }}
         >
           <motion.span
             key={clickKey}
@@ -160,7 +161,6 @@ export function Slider({ detents, value, onChange, className, disabled = false, 
             transition={springValues.bouncy}
           />
         </motion.div>
-        <ThumbPositioner pct={springPct} />
       </div>
       <div className="mt-1 flex justify-between">
         {detents.map((d, i) => (
@@ -182,22 +182,4 @@ export function Slider({ detents, value, onChange, className, disabled = false, 
       </div>
     </div>
   );
-}
-
-/**
- * Binds the spring percentage to the thumb's `left` without re-rendering React on each frame.
- * (Kept separate so the thumb markup stays declarative.)
- */
-function ThumbPositioner({ pct }: { pct: ReturnType<typeof useSpring> }) {
-  const ref = useRef<HTMLStyleElement | null>(null);
-  useEffect(() => {
-    const el = ref.current?.parentElement?.querySelector<HTMLElement>('[aria-hidden="true"].h-7');
-    if (!el) return;
-    const apply = (v: number) => {
-      el.style.left = `${String(v)}%`;
-    };
-    apply(pct.get());
-    return pct.on('change', apply);
-  }, [pct]);
-  return <style ref={ref} />;
 }
