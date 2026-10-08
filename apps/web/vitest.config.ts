@@ -12,6 +12,7 @@ export default defineConfig({
     include: ['**/*.test.{ts,tsx}'],
     exclude: ['node_modules', '.next', 'tests/e2e/**'],
     css: false,
+    passWithNoTests: true,
   },
   resolve: {
     alias: { '@': path.resolve(__dirname, '.') },
