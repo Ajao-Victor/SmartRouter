@@ -1,20 +1,8 @@
-import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
-
 import type { Metadata, Viewport } from 'next';
 
-import './globals.css';
+import { fontVariables } from '@/lib/fonts';
 
-const spaceGrotesk = Space_Grotesk({
-  subsets: ['latin'],
-  variable: '--font-space-grotesk',
-  display: 'swap',
-});
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-jetbrains-mono',
-  display: 'swap',
-});
+import './globals.css';
 
 export const metadata: Metadata = {
   title: 'SmartRouter',
@@ -31,14 +19,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      lang="en"
-      data-theme="dark"
-      className={`${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable}`}
-    >
+    <html lang="en" data-theme="dark" className={fontVariables}>
       <body>
-        <div className="bg-fallback" aria-hidden="true" />
-        <div className="relative z-10">{children}</div>
+        {/* WebGL-free router field; RouterField (R3F) replaces it in Task 7 when capable. */}
+        <div className="bg-field-fallback pointer-events-none fixed inset-0 z-field" aria-hidden="true" />
+        <div className="bg-grid-field pointer-events-none fixed inset-0 z-field" aria-hidden="true" />
+        <div className="bg-noise pointer-events-none fixed inset-0 z-field" aria-hidden="true" />
+        <div className="relative z-content">{children}</div>
       </body>
     </html>
   );
