@@ -10,7 +10,6 @@ import type { Recommendation } from '@/lib/api/types';
 import { HoloCard } from '@/components/fx/HoloCard';
 import { QualityPriceSpeedBars } from '@/components/recommend/QualityPriceSpeedBars';
 import { TypeLine } from '@/components/recommend/TypeLine';
-import { Chip } from '@/components/ui/Chip';
 import { PriceTag } from '@/components/ui/PriceTag';
 
 export interface ModelCardProps {
@@ -70,9 +69,14 @@ export const ModelCard = forwardRef<HTMLDivElement, ModelCardProps>(function Mod
           <p className="truncate text-xs text-text-2">{rec.is_free ? rec.provider : `${rec.provider} · via MPP`}</p>
         </div>
         {badge && (
-          <Chip tone={tone === 'accent' ? 'accent' : tone} selected className="pointer-events-none h-6 px-2 text-2xs" tabIndex={-1}>
+          <span
+            className={clsx(
+              'num inline-flex h-6 shrink-0 items-center rounded-pill px-2 text-2xs font-medium',
+              rec.is_free ? 'bg-free/15 text-free' : rec.is_best_quality ? 'bg-accent-2/15 text-accent-2' : 'bg-accent/20 text-accent-hi',
+            )}
+          >
             {badge}
-          </Chip>
+          </span>
         )}
       </div>
 
