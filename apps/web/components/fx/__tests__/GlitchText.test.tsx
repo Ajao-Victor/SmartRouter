@@ -14,9 +14,9 @@ describe('GlitchText', () => {
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Free · Llama 3.1 8B');
   });
 
-  it('exposes the text to assistive tech while layers are decorative', () => {
-    render(<GlitchText text="Cover letter draft" />);
-    expect(screen.getByLabelText('Cover letter draft')).toBeInTheDocument();
-    expect(screen.getAllByText('Cover letter draft').length).toBeGreaterThanOrEqual(1);
+  it('exposes the text once to assistive tech while layers are decorative', () => {
+    const { container } = render(<GlitchText text="Cover letter draft" />);
+    expect(container.querySelector('.sr-only')).toHaveTextContent('Cover letter draft');
+    expect(container.querySelectorAll('[aria-hidden="true"]').length).toBeGreaterThanOrEqual(1);
   });
 });
