@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 
 import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';
+
 import { useUiStore } from '@/stores/uiStore';
 
 import { PreferencesProvider } from './PreferencesProvider';
