@@ -20,6 +20,8 @@ export interface UiState {
   hydrated: boolean;
   /** Request whose receipt drawer is open. */
   receiptRequestId: string | null;
+  /** Title shown in the TopBar (chat title written by the free model). */
+  pageTitle: string | null;
 }
 
 export interface UiActions {
@@ -33,6 +35,7 @@ export interface UiActions {
   markHydrated: () => void;
   openReceipt: (requestId: string) => void;
   closeReceipt: () => void;
+  setPageTitle: (title: string | null) => void;
   reset: () => void;
 }
 
@@ -45,6 +48,7 @@ const initialState: UiState = {
   sdkDialogOpen: false,
   hydrated: false,
   receiptRequestId: null,
+  pageTitle: null,
 };
 
 /**
@@ -85,6 +89,9 @@ export const useUiStore = create<UiState & UiActions>()(
       },
       closeReceipt: () => {
         set({ receiptRequestId: null });
+      },
+      setPageTitle: (pageTitle) => {
+        set({ pageTitle });
       },
       reset: () => {
         // Preferences survive logout; transient UI resets.
