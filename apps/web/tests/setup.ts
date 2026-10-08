@@ -32,7 +32,7 @@ if (typeof globalThis.IntersectionObserver === 'undefined') {
       this.cb = cb;
     }
     observe(target: Element) {
-      this.cb([{ isIntersecting: true, target } as IntersectionObserverEntry], this as unknown as IntersectionObserver);
+      this.cb([{ isIntersecting: true, target } as IntersectionObserverEntry], this);
     }
     unobserve() {
       /* noop */
@@ -44,5 +44,5 @@ if (typeof globalThis.IntersectionObserver === 'undefined') {
       return [];
     }
   }
-  globalThis.IntersectionObserver = IO as unknown as typeof IntersectionObserver;
+  globalThis.IntersectionObserver = IO;
 }
