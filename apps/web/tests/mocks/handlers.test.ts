@@ -79,12 +79,11 @@ describe('mock API', () => {
 
   it('runs the retry and fail scenarios', async () => {
     const chat = (await (await fetch(`${API}/api/chats`, { method: 'POST', body: JSON.stringify({ first_prompt: 'Write a poem [retry]' }) })).json()) as { id: string };
-    // the user message must exist for the scenario hook; mirror what the app does before /run
-    state.messages.get(chat.id)?.push({ id: 'm1', chat_id: chat.id, seq: 0, role: 'user', content: 'Write a poem [retry]', attachments: [], model_id: null, request_id: null, result_ref: null, tokens: 5, status: 'done', created_at: new Date().toISOString() });
     const q = (await (await fetch(`${API}/api/chats/${chat.id}/quote`, { method: 'POST', body: JSON.stringify({ prompt: 'Write a poem [retry]' }) })).json()) as { quote: { id: string; model_id: string; price: number } };
-    const res = await fetch(`${API}/run`, { method: 'POST', body: JSON.stringify({ quote_id: q.quote.id, chat_id: chat.id, model_id: q.quote.model_id, voucher: { channel_id: 'ch_demo_0001', cumulative_amount: q.quote.price, signature: 's' } }) });
+    const res = await fetch(`${API}/run`, { method: 'POST', body: JSON.stringify({ quote_id: q.quote.id, chat_id: chat.id, model_id: q.quote.model_id, prompt: 'Write a poem [retry]', voucher: { channel_id: 'ch_demo_0001', cumulative_amount: q.quote.price, signature: 's' } }) });
     const events = await readSse(res);
     expect(events.some((e) => e.event === 'retry')).toBe(true);
+    expect(state.messages.get(chat.id)?.some((m) => m.role === 'user' && m.content === 'Write a poem [retry]')).toBe(true);
   }, 15_000);
 
   it('gates authed routes', async () => {
