@@ -18,6 +18,8 @@ export interface UiState {
   sdkDialogOpen: boolean;
   /** Set once `persist` has rehydrated from IndexedDB on the client. */
   hydrated: boolean;
+  /** Request whose receipt drawer is open. */
+  receiptRequestId: string | null;
 }
 
 export interface UiActions {
@@ -29,6 +31,8 @@ export interface UiActions {
   setForceReducedMotion: (on: boolean) => void;
   setSdkDialogOpen: (open: boolean) => void;
   markHydrated: () => void;
+  openReceipt: (requestId: string) => void;
+  closeReceipt: () => void;
   reset: () => void;
 }
 
@@ -40,6 +44,7 @@ const initialState: UiState = {
   forceReducedMotion: false,
   sdkDialogOpen: false,
   hydrated: false,
+  receiptRequestId: null,
 };
 
 /**
@@ -74,6 +79,12 @@ export const useUiStore = create<UiState & UiActions>()(
       },
       markHydrated: () => {
         set({ hydrated: true });
+      },
+      openReceipt: (requestId) => {
+        set({ receiptRequestId: requestId });
+      },
+      closeReceipt: () => {
+        set({ receiptRequestId: null });
       },
       reset: () => {
         // Preferences survive logout; transient UI resets.
