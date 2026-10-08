@@ -52,7 +52,9 @@ export function MessageBubble({ message, job = null, onRerunFree }: MessageBubbl
   const status = entry?.status ?? (message.status === 'error' ? 'error' : 'done');
   const modelId = entry?.modelId ?? message.model_id;
   const requestId = entry?.result?.requestId ?? entry?.requestId ?? message.request_id;
-  const file = entry?.file ?? (message.result_ref ? { url: message.result_ref, mime: 'image/jpeg' } : null);
+  const file =
+    entry?.file ??
+    (message.result_ref ? { url: message.result_ref, mime: /\.(mp3|wav|ogg|m4a)(\?|$)/i.test(message.result_ref) ? 'audio/mpeg' : 'image/jpeg' } : null);
   const jobId = entry?.jobId ?? null;
 
   if (isUser) {
