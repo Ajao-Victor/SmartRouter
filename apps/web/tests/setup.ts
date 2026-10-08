@@ -1,8 +1,9 @@
 import '@testing-library/jest-dom/vitest';
 
 // jsdom lacks matchMedia; motion/react and reduced-motion hooks query it.
-if (typeof window !== 'undefined' && !window.matchMedia) {
-  window.matchMedia = (query: string) =>
+const w = globalThis as { matchMedia?: typeof window.matchMedia };
+if (!w.matchMedia) {
+  w.matchMedia = (query: string) =>
     ({
       matches: false,
       media: query,
