@@ -42,10 +42,12 @@
 | Phase 0 Alignment | ⬜ |
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
 | Phase 2 Core UI | ✅ Tasks 9–17 done (Oct 8, 2026) |
-| Phase 3 Integration | 🟡 Tasks 18–19 done (Oct 8, 2026); Tasks 20–25 next |
+| Phase 3 Integration | 🟡 Tasks 18–20 done (Oct 8, 2026); Tasks 21–25 next |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 20 (2026-10-08) — spend permission + session open (`lib/tempo/session/`).** `voucherSigner` (non-extractable WebCrypto ECDSA P-256 keypair per channel, persisted in IndexedDB — never in state; `publicKeyHex` raw SPKI as `authorized_signer`; `sign`/`verify`/`adopt`/`forget`; canonical voucher bytes `${channelId}:${cumulative}` — assumption, Gaps §3.2). `SessionClient` interface (openChannel maxDeposit + authorizedSigner, topUp without close, signVoucher cumulative, status) with `MockSessionClient` (in-memory channels, real signatures, no timers) and an unwired `impl.tempo.ts` stub; `getSessionClient()` warns on mainnet. `spendPermission.ts` (scope = USDC.e token, SmartRouter payee, open+topUp calls, 30-day expiry assumption; ensure/get/revoke via the adapter). `useSpendPermission` (query + approve/revoke, `permissionStatus`). `useOpenAllocation` (permission → signer → channel → `POST /api/sessions` → stores). `useTopUp` (click-only; `beginTopUp` → client top-up → mock-only `POST /api/sessions/:id/top-up` → `endTopUp`; the real API is expected to observe the chain — Gaps §3.5). AppShell/Settings wired (HUD Open allocation / Top up with a teal burst; wallet sheet permission approve/revoke). Verified: lint, typecheck, 125 tests (36 files).
 
 - **Task 19 (2026-10-08) — balances, deposit, swap.** `hooks/useBalance` (reads balances through the Tempo adapter — never stored; 15 s refetch while the wallet sheet is open; `hasNonUsdce`, `usdce`). `lib/tempo/deposit.ts` (`openDeposit`: SDK deposit dialog then balance refetch so the splash animates). `lib/tempo/swap.ts` (`openSwapToUsdce`: SDK swap screen then refetch). AppShell wires live balances, Deposit and the conditional Swap button into the WalletSheet. Verified: lint, typecheck, 122 tests (34 files).
 
@@ -89,6 +91,8 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | The ESLint no-timers rule for `lib/tempo/session/**` is enforced literally: even the mock has no latency simulation | PDF: no automatic top-ups; the rule protects the real client when it lands |
+| 2026-10-08 | Voucher key is generated under a draft id, then adopted under the channel id after open | The channel id is unknown until the SDK opens it, but the public key must be registered at open |
 | 2026-10-08 | Deposit/swap are plain async flows that invalidate the balance query; the UI reacts to the data change | Keeps SDK dialogs out of React state; the BalanceList splash triggers from the balance delta |
 | 2026-10-08 | All wallet UX goes through `TempoAccountsAdapter`; the mock runs on testnet/mock and the real SDK is a single file swap | Backend_Gaps_Report §3/§8 unresolved; keeps every flow demoable now |
 | 2026-10-08 | SIWE statement: "Sign in to SmartRouter. This does not move any funds." | Clear consent copy; exact fields to confirm (Gaps §6.1) |
@@ -152,6 +156,9 @@
 
 ## Assumptions currently in code
 
+- `notifyTopUp` is a mock-only endpoint; the real flow may be chain-observed and the call becomes a no-op.
+- P-256 ECDSA with SHA-256 is assumed for the voucher signer (Gaps §3.3).
+
 - Mock deposit always adds $2 USDC.e and mock swap folds every other token into USDC.e.
 
 - Mock signatures are deterministic `0xmock…` strings; the mock API accepts any signature.
@@ -191,6 +198,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 20** (voucher signer, SessionClient + mock + stub, spend permission, three hooks, shell/settings wiring, tests). No new packages. Next: "execute task 21".
 
 - **2026-10-08** — Executed **Task 19** (useBalance, deposit, swap, shell wiring, test). No new packages. Next: "execute task 20".
 
