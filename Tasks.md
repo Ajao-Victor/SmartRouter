@@ -110,7 +110,7 @@
 **State:** reads `uiStore.sdkDialogOpen`, `streamStore` activity (sum of streaming messages) for orb/field `activity`.
 **Acceptance:** dev page `app/dev/fx/page.tsx` shows each FX; FPS ≥ 30 on a throttled mobile profile; all FX degrade without WebGL and under reduced motion.
 
-### Task 8 — App shell: layouts, TopBar, Testnet banner, providers  `todo`
+### Task 8 — App shell: layouts, TopBar, Testnet banner, providers  `done` (2026-10-08; commits: bd78071 da24c54 4e3a4d1 e78c08c ab5a6de 091471f 8b39d5e 8775f1c 5af59c7 fb76cde 42827e8)
 **Files**
 - `app/providers.tsx` — `QueryClientProvider` (defaults: `retry 1`, `staleTime 30s`), `ReducedMotionProvider`, Toast host, GlowTrail host, ParticleBurst canvas.
 - `app/layout.tsx` — wraps providers; mounts `RouterField` backdrop (`z-0`); `TestnetBanner` when `env.network==='testnet'`.
