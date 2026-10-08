@@ -1,11 +1,35 @@
+'use client';
+
+import { Suspense } from 'react';
+
+import { useSearchParams } from 'next/navigation';
+
+import { taskTypeSchema } from '@/lib/api/types';
+
+import { useChats } from '@/hooks/useChats';
+
+import { ChatList } from '@/components/chat/ChatList';
+import { NewChat } from '@/components/chat/NewChat';
+
+function NewChatScreen() {
+  const params = useSearchParams();
+  const parsed = taskTypeSchema.safeParse(params.get('category'));
+  const chats = useChats();
+  return (
+    <div className="space-y-10">
+      <NewChat initialCategory={parsed.success ? parsed.data : null} />
+      <section className="space-y-3">
+        <p className="num text-2xs tracking-label text-text-2 uppercase">Recent</p>
+        <ChatList chats={chats.data} loading={chats.isPending} />
+      </section>
+    </div>
+  );
+}
+
 export default function NewChatPage() {
   return (
-    <section className="space-y-2">
-      <p className="num text-2xs tracking-label text-text-2 uppercase">new chat</p>
-      <h1 className="font-display text-display-sm text-text-0">
-        What do you want <span className="text-beam">done</span>?
-      </h1>
-      <p className="text-sm text-text-1">Category chips and the composer arrive in Task 11.</p>
-    </section>
+    <Suspense fallback={null}>
+      <NewChatScreen />
+    </Suspense>
   );
 }
