@@ -1,4 +1,4 @@
-import type { ZodType } from 'zod';
+import type { ZodType, ZodTypeDef } from 'zod';
 
 import { env } from '@/lib/env';
 
@@ -98,8 +98,11 @@ export interface ApiRequestOptions<T> {
   method?: HttpMethod;
   /** JSON-serialisable body; sent as `application/json`. */
   body?: unknown;
-  /** Validates and types the response. Invalid payloads throw `ApiError('invalid_response')`. */
-  schema?: ZodType<T>;
+  /**
+   * Validates and types the response. Invalid payloads throw `ApiError('invalid_response')`.
+   * `Input = unknown` so `T` is inferred from the schema's *output* (branded micro-USD), not its input.
+   */
+  schema?: ZodType<T, ZodTypeDef, unknown>;
   signal?: AbortSignal;
   headers?: Record<string, string>;
 }
