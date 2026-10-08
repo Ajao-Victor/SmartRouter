@@ -41,11 +41,13 @@
 | Docs suite (12 files) | ✅ generated Oct 8, 2026 |
 | Phase 0 Alignment | ⬜ |
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
-| Phase 2 Core UI | 🟡 Tasks 9–14 done (Oct 8, 2026); Tasks 15–17 next |
+| Phase 2 Core UI | 🟡 Tasks 9–15 done (Oct 8, 2026); Tasks 16–17 next |
 | Phase 3 Integration | ⬜ |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 15 (2026-10-08) — allocation HUD (`components/allocation/`).** `hooks/useSession` (30 s refetch, mirrors into `allocationStore`), `hooks/useFreeUsage`. `AllocationHUD` (44 px LiquidRing of remaining/deposit with ok/low/used/toppingUp; tap → floating panel with deposit/used/remaining and "Top up $2"; "Open allocation · $2" button when none/closed; copy: no automatic top-ups). `TopUpBar` (PDF "Allocation used — Top up $2" via GlitchText; Top up | Continue free MagneticButtons meeting from opposite edges; auto-free notice "Allocation used — continuing free"; Continue free disabled at 30/30). `FreeQuotaMeter` ("Free: n/30 today" segmented meter, signal at the cap). Verified: lint, typecheck, 111 tests (29 files).
 
 - **Task 14 (2026-10-08) — thread + messages (`components/chat/`).** `lib/markdown.tsx` (react-markdown + GFM + rehype-sanitize; http/https/mailto only; new-tab noopener links; mono code with `scanline-once`). `hooks/useChat` (chat+messages query; optimistic cache helpers `append/update/setCurrentModel`; `optimisticMessage`). `hooks/useModelLabel`, `hooks/useFeedback` (thumbs + compare votes). `StreamText` (plain text + caret while streaming, rAF-batched flush with per-batch micro-entrance, markdown once done; resets on retry). `MessageBubble` (user bubble; assistant glass bubble driven by `streamStore` status via `bubble` variants: streaming/retrying/error/done; model tag "{label} · via MPP" or free; "Retrying on {model} — no extra charge"; error → "Rerun on free model"; footer price/latency, ThumbsFeedback, Receipt → `uiStore.openReceipt`). `ThumbsFeedback` (pop + six teal particles on up). `MediaCard` (circle-reveal image via next/image, unoptimized unless object-storage host; audio with canvas waveform; download). `JobCard` (orb capsule "Generating… (worker)", `layoutId` morph to MediaCard). `Thread` (auto-follow while streaming unless scrolled up → "Jump to latest"; 60-message window with "Show earlier"). `streamStore.done(id, result)` records price/latency/request id; `uiStore.receiptRequestId`. Verified: lint, typecheck, 104 tests (27 files).
 
@@ -79,6 +81,7 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | Top-up amount shown everywhere = the user's allocation setting (`me.allocation`), default $2 | PDF: "Top up $2" matches the default allocation size |
 | 2026-10-08 | Raw HTML in model output is dropped (no rehype-raw) and sanitised | security.md §6: replies are untrusted |
 | 2026-10-08 | Images use `next/image` with `unoptimized` for non-object-storage hosts | Mock images come from picsum; production object storage stays optimised |
 | 2026-10-08 | Badges and tags that are not actionable render as spans / non-focusable chips | Avoids phantom buttons for assistive tech |
@@ -166,6 +169,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 15** (useSession, useFreeUsage, AllocationHUD, TopUpBar, FreeQuotaMeter, tests). No new packages. Next: "execute task 16".
 
 - **2026-10-08** — Executed **Task 14** (markdown, useChat, StreamText, MessageBubble, Thread, MediaCard, JobCard, thumbs, tests). No new packages. Next: "execute task 15".
 
