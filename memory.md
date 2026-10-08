@@ -42,10 +42,12 @@
 | Phase 0 Alignment | ⬜ |
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
 | Phase 2 Core UI | ✅ Tasks 9–17 done (Oct 8, 2026) |
-| Phase 3 Integration | 🟡 Tasks 18–24 done (Oct 8, 2026); Task 25 next |
+| Phase 3 Integration | ✅ Tasks 18–25 done (Oct 8, 2026) |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 25 (2026-10-08) — Sentry, CSP notes, host guard, CI, README.** `sentry.client.config.ts` (init only with a DSN; `sendDefaultPii: false`; prompts/wallet breadcrumbs dropped for `/run`, `/quote`, `/sessions`; hex addresses/hashes scrubbed from messages, URLs and exceptions; replays off), `sentry.server.config.ts`, `instrumentation.ts`. `scripts/ci.sh` = lint + typecheck + test + guard:hosts + build. `apps/web/README.md` (run, checks, env, CSP verification steps for the Tempo origins — Gaps §8, monitoring). `pnpm guard:hosts` OK. Verified: lint, typecheck, 142 tests; production build deferred while the dev server holds `.next` (see Task 26 for the separate build dir).
 
 - **Task 24 (2026-10-08) — receipts, free usage, error semantics.** Receipts: `ReceiptDrawer` + `useReceipt` already show the session id immediately and decode the tx hash after settlement via `TxHashReveal` with validated explorer links (`lib/explorer.ts`). Free usage: `FreeQuotaMeter` in the workspace from `useFreeUsage`; the Free ModelCard is disabled at 30/30 with the reason; `TopUpBar` disables Continue free at the cap. Error semantics: `lib/api/errors.ts` maps every `ApiError` code to one UI action (sign_in, top_up, requote, cooldown with Retry-After, free_exhausted, open_allocation, offline, toast) with PDF copy; quotes use it (cooldown → dock shake, 401 → landing); `useRun` already handles allocation exceeded → TopUpBar, quote expired → re-quote, 429 → cooldown, session closed → "Open allocation". Verified: lint, typecheck, 142 tests (41 files).
 
@@ -99,6 +101,7 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | Sentry is a no-op without a DSN and never receives wallet/prompt traffic | security.md §8; hackathon builds run without a DSN |
 | 2026-10-08 | One `toUiAction` mapper is the single source of error → UI behaviour | Technical_Requirements §5.4 rows stay consistent across hooks and components |
 | 2026-10-08 | Compare reserves the two vouchers sequentially (cumulative total) then streams in parallel | Vouchers are cumulative per channel (PDF/TIP-1034); parallel reservation would race the running total |
 | 2026-10-08 | The losing compare reply is removed from the local cache after the collapse animation | The thread shows one chosen answer; the server keeps both requests and the vote |
@@ -170,6 +173,8 @@
 
 ## Assumptions currently in code
 
+- `withSentryConfig` source-map upload is not wired (no auth token); client errors still report with the DSN.
+
 - Default cooldown is 10 s when the API sends no Retry-After.
 
 - Compare vote body `{chat_id, left_request_id, right_request_id, pick}` is proposed (Gaps §1).
@@ -222,6 +227,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 25** (Sentry configs, instrumentation, CI script, README). Phase 3 complete. No new packages. Next: "execute task 26".
 
 - **2026-10-08** — Executed **Task 24** (errors helper + test, free cap wiring, quota meter, quote error mapping). No new packages. Next: "execute task 25".
 
