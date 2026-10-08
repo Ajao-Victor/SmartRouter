@@ -165,7 +165,7 @@
 **Animations:** `dock.idle/focused/cooldown`; pill colour crossfade on model change (`layoutId="model-pill"`); picker `slideUpSheet`.
 **Acceptance:** Composer works on 360px wide; attachments rejected outside allowlist with a toast.
 
-### Task 13 — Recommendation panel, ModelCard, Slider  `todo`
+### Task 13 — Recommendation panel, ModelCard, Slider  `done` (2026-10-08; commits: 741e2cd 97d3a93 98541ab 648ac09 5b8b9da c1680d0 69bf3e4 4a736bc 8141033 8d1ea3f 0a10501 d72233f c993d35)
 **Files**
 - `hooks/useQuote.ts` — mutation `POST /api/chats/:id/quote` (proposed) with `{prompt, attachments?, model_id?, slider?}`; caches under `['quote', chatId, promptHash, modelId, slider]` with `gcTime 5m`; debounce slider changes 300 ms.
 - `components/recommend/Slider.tsx` — three detents Cheapest / Balanced / Best quality; gradient track; glowing thumb (`useSpring`); keyboard arrows; shows weights tooltip `(0.2,0.7,0.1)` / `(0.45,0.4,0.15)` / `(0.8,0.1,0.1)`.
