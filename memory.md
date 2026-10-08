@@ -41,11 +41,13 @@
 | Docs suite (12 files) | ✅ generated Oct 8, 2026 |
 | Phase 0 Alignment | ⬜ |
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
-| Phase 2 Core UI | 🟡 Tasks 9–13 done (Oct 8, 2026); Tasks 14–17 next |
+| Phase 2 Core UI | 🟡 Tasks 9–14 done (Oct 8, 2026); Tasks 15–17 next |
 | Phase 3 Integration | ⬜ |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 14 (2026-10-08) — thread + messages (`components/chat/`).** `lib/markdown.tsx` (react-markdown + GFM + rehype-sanitize; http/https/mailto only; new-tab noopener links; mono code with `scanline-once`). `hooks/useChat` (chat+messages query; optimistic cache helpers `append/update/setCurrentModel`; `optimisticMessage`). `hooks/useModelLabel`, `hooks/useFeedback` (thumbs + compare votes). `StreamText` (plain text + caret while streaming, rAF-batched flush with per-batch micro-entrance, markdown once done; resets on retry). `MessageBubble` (user bubble; assistant glass bubble driven by `streamStore` status via `bubble` variants: streaming/retrying/error/done; model tag "{label} · via MPP" or free; "Retrying on {model} — no extra charge"; error → "Rerun on free model"; footer price/latency, ThumbsFeedback, Receipt → `uiStore.openReceipt`). `ThumbsFeedback` (pop + six teal particles on up). `MediaCard` (circle-reveal image via next/image, unoptimized unless object-storage host; audio with canvas waveform; download). `JobCard` (orb capsule "Generating… (worker)", `layoutId` morph to MediaCard). `Thread` (auto-follow while streaming unless scrolled up → "Jump to latest"; 60-message window with "Show earlier"). `streamStore.done(id, result)` records price/latency/request id; `uiStore.receiptRequestId`. Verified: lint, typecheck, 104 tests (27 files).
 
 - **Task 13 (2026-10-08) — recommendation panel (`components/recommend/`).** `hooks/useQuote` (mutation to `POST /api/chats/:id/quote`; caches by chat/prompt-hash/model/slider with 5-min GC; `isQuoteExpired`). `PresetSlider` (ui Slider with Cheapest/Balanced/Best quality detents + weights tooltip (0.2,0.7,0.1)/(0.45,0.4,0.15)/(0.8,0.1,0.1)). `QualityPriceSpeedBars` (three bars grow on the soft spring). `TypeLine` (12 ms/char typed reason). `ClassificationTags` (task · short/long · language · needs web). `SuggestionChip` (shimmering "This looks like {task} — try {model}" with Switch/Dismiss — suggest, never force). `ModelCard` (HoloCard option: label, "via MPP"/free, PriceTag, speed bolts + web globe, typed reason, bars, Top pick/Best quality/Free badges as spans, compare checkbox). `RecommendationPanel` (AnimatePresence + stagger; tags, Auto button, slider with 300 ms debounced re-quote, four cards with `reorderLayout` on the glide spring, horizontal snap row on mobile → 2×2 → row of 4, suggestion, Attribution; `cardRef` registry for GlowTrail targets). `lib/useDebouncedCallback`. Verified: lint, typecheck, 98 tests (25 files).
 
@@ -77,6 +79,8 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | Raw HTML in model output is dropped (no rehype-raw) and sanitised | security.md §6: replies are untrusted |
+| 2026-10-08 | Images use `next/image` with `unoptimized` for non-object-storage hosts | Mock images come from picsum; production object storage stays optimised |
 | 2026-10-08 | Badges and tags that are not actionable render as spans / non-focusable chips | Avoids phantom buttons for assistive tech |
 | 2026-10-08 | Slider re-quote is debounced inside the panel (300 ms) | Protects the 402 reads from slider scrubbing (security.md §9) |
 | 2026-10-08 | Composer is controlled by `composerStore` (draft/attachments) and emits `onGetQuote(prompt)` / `onRun()`; quoting and running live in the workspace (Task 21) | Keeps the dock reusable for new-chat and chat modes |
@@ -131,6 +135,8 @@
 
 ## Assumptions currently in code
 
+- MessageBubble treats `result_ref` on a history message as an image (mime image/jpeg); audio results arrive via job polling (Task 23).
+
 - Price/speed bar scores are derived client-side from the four options (cheapest = 1); quality comes from the API's rescaled `quality` field.
 
 - Landing `SavingProof` numbers are PDF constants, not fetched; the live quote panel (Task 13) uses API prices.
@@ -160,6 +166,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 14** (markdown, useChat, StreamText, MessageBubble, Thread, MediaCard, JobCard, thumbs, tests). No new packages. Next: "execute task 15".
 
 - **2026-10-08** — Executed **Task 13** (useQuote, PresetSlider, bars, TypeLine, tags, SuggestionChip, ModelCard, RecommendationPanel, tests). No new packages. Next: "execute task 14".
 
