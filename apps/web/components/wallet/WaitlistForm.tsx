@@ -51,7 +51,7 @@ export function WaitlistForm({ interest, onDone }: WaitlistFormProps) {
 
   const [at, setAt] = useState<{ clientX: number; clientY: number } | null>(null);
 
-  const submit = (e: React.FormEvent<HTMLFormElement>) => {
+  const submit = (e: { preventDefault: () => void }) => {
     e.preventDefault();
     const parsed = waitlistInputSchema.safeParse({ email: email.trim(), country, interest });
     if (!parsed.success) {
