@@ -43,9 +43,11 @@
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
 | Phase 2 Core UI | ✅ Tasks 9–17 done (Oct 8, 2026) |
 | Phase 3 Integration | ✅ Tasks 18–25 done (Oct 8, 2026) |
-| Phase 4 Polish | 🟡 Task 26 done (Oct 8, 2026); Tasks 27–29 next |
+| Phase 4 Polish | 🟡 Tasks 26–27 done (Oct 8, 2026); Tasks 28–29 next |
 
 ## Completed features
+
+- **Task 27 (2026-10-08) — accessibility and copy pass.** `LiveRegion` (single polite region: "Streaming reply…", "Done — {model}", "Allocation used — Top up"). HoloCard focus ring; chips 44 px on coarse pointers; slider detent ticks made decorative (fixed an axe `nested-interactive`). `axe-core` audit test (serious/critical) over the landing page and the money components (recommendations, top-up bar, allocation controls, spend permission) — zero violations (colour-contrast rule skipped in jsdom; tokens were chosen ≥ 4.5:1). Copy audit confirmed verbatim PDF strings: "Allocation used — Top up $2", "Continue free", "Free · Llama 3.1 8B", "80% of the best quality at 1/34 of the price", "Quality data: LMArena, Artificial Analysis" (under every recommendation, landing, settings), "available via MPP", "Coming soon". Keyboard: Esc on every overlay, ⌘/Ctrl+Enter, slider arrows/Home/End. Verified: lint, typecheck, 145 tests (43 files).
 
 - **Task 26 (2026-10-08) — performance and fallbacks.** Already in place: R3F scenes lazy via `next/dynamic` (ssr off), DPR ≤ 1.5, `frameloop='never'` on hidden tab / SDK dialog, capability gate (webgl2 ∧ cores ≥ 4 ∧ ¬reduced ∧ ¬saveData), CSS field fallback always underneath, one particle system ≤ 120, ≤ 3 blur surfaces by construction (dock, sheet, toast). New: markdown renderer lazy-loaded out of the chat route (chat first-load 270 → 223 kB); `NEXT_DIST_DIR` lets CI/phase builds write to `.next-build` while `next dev` holds `.next`; `scripts/budget.mjs` checks App Router first-load and the lazy WebGL chunk against budgets (landing ≤ 220 gz, chat ≤ 260 gz, WebGL ≤ 230 gz) — current: landing ≈ 116 kB gz, chat ≈ 234 kB gz, WebGL ≈ 224 kB gz, all OK; OpenTelemetry dynamic-require warning silenced; production build clean. Verified: lint, typecheck, 142 tests (41 files), build.
 
@@ -103,6 +105,7 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | axe runs in unit tests (jsdom) with colour-contrast disabled | Contrast needs layout; it was validated by token choice in UI_UX_Brief §2 |
 | 2026-10-08 | WebGL lazy-chunk budget raised from design.md's 180 kB to 230 kB gz | three.js core alone is ≈165 kB gz; the chunk only loads on capable devices after first paint |
 | 2026-10-08 | Phase builds go to `.next-build` via `NEXT_DIST_DIR` | The user previews on `next dev`, which owns `.next` in Next 15 |
 | 2026-10-08 | Sentry is a no-op without a DSN and never receives wallet/prompt traffic | security.md §8; hackathon builds run without a DSN |
@@ -233,6 +236,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 27** (live region, focus/hit-target fixes, axe + live-region tests, slider a11y fix). Added `axe-core`. Next: "execute task 28".
 
 - **2026-10-08** — Executed **Task 26** (lazy markdown, dist-dir switch, budget script, warning fix, build verified). No new packages. Next: "execute task 27".
 
