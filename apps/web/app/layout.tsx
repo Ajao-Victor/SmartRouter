@@ -23,7 +23,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" data-theme="dark" className={fontVariables}>
+    <html lang="en" data-theme="dark" data-scroll-behavior="smooth" className={fontVariables}>
       <body>
         <Providers>
           <TestnetBanner />
