@@ -2,11 +2,9 @@ import type { Metadata, Viewport } from 'next';
 
 import { fontVariables } from '@/lib/fonts';
 
-import { GlowTrailLayer } from '@/components/fx/GlowTrail';
-import { ParticleLayer } from '@/components/fx/ParticleBurst';
-import { RouterField } from '@/components/fx/RouterField';
-import { PreferencesProvider } from '@/components/layout/PreferencesProvider';
-import { Toaster } from '@/components/ui/Toast';
+import { TestnetBanner } from '@/components/layout/TestnetBanner';
+
+import { Providers } from './providers';
 
 import './globals.css';
 
@@ -27,13 +25,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" data-theme="dark" className={fontVariables}>
       <body>
-        <PreferencesProvider>
-          <RouterField />
-          <div className="relative z-content">{children}</div>
-          <GlowTrailLayer />
-          <ParticleLayer />
-          <Toaster />
-        </PreferencesProvider>
+        <Providers>
+          <TestnetBanner />
+          {children}
+        </Providers>
       </body>
     </html>
   );
