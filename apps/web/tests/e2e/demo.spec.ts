@@ -16,7 +16,7 @@ test.describe('demo path', () => {
     // Wallet: deposit (mock adds $2 USDC.e) and open the allocation
     await page.getByRole('button', { name: 'Wallet' }).click();
     const sheet = page.getByRole('dialog');
-    await expect(sheet).toContainText('USDC.E');
+    await expect(sheet).toContainText('USDC.e');
     await sheet.getByRole('button', { name: 'Deposit' }).click();
     await expect(sheet).toContainText('$14.50');
     await page.keyboard.press('Escape');
