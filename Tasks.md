@@ -291,7 +291,7 @@
 - `ThumbsFeedback` → `POST /api/feedback`.
 **Acceptance:** image result reveals; music job polls to a playable audio card; compare vote posts; flags cut cleanly.
 
-### Task 24 — Receipts with settlement tx hash, free usage, error semantics  `todo`
+### Task 24 — Receipts with settlement tx hash, free usage, error semantics  `done` (2026-10-08; commits: 93710d3 43403c7 9762e34 bc3b641 7340a69)
 **Files**
 - Wire `ReceiptDrawer` to `useReceipt`; TxHashReveal when `tx_hash` arrives; explorer link base per network in `lib/explorer.ts` (validated).
 - `FreeQuotaMeter` from `useFreeUsage`; disable Free card at 30 with reason.
