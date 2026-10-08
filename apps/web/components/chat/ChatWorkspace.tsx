@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { AnimatePresence } from 'motion/react';
 
-import { isApiError } from '@/lib/api/client';
 import { api } from '@/lib/api/endpoints';
+import { describeAction, toUiAction } from '@/lib/api/errors';
 import type { SliderPreset } from '@/lib/api/types';
 
 
@@ -25,6 +25,7 @@ import { useStreamStore } from '@/stores/streamStore';
 import { toast } from '@/stores/toastStore';
 import { useUiStore } from '@/stores/uiStore';
 
+import { FreeQuotaMeter } from '@/components/allocation/FreeQuotaMeter';
 import { TopUpBar } from '@/components/allocation/TopUpBar';
 import { CompareSplit } from '@/components/chat/CompareSplit';
 import { Composer } from '@/components/chat/Composer';
@@ -46,6 +47,7 @@ export interface ChatWorkspaceProps {
  */
 export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
   const params = useSearchParams();
+  const router = useRouter();
   const me = useMe();
   const chat = useChat(chatId);
   const freeUsage = useFreeUsage();
@@ -103,13 +105,15 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
         { prompt, slider: preset, ...(modelId ? { model_id: modelId } : {}) },
         {
           onError: (err) => {
-            if (isApiError(err) && err.code === 'rate_limited') runner.bumpCooldown();
-            toast.error('Could not get a quote', isApiError(err) ? err.message : undefined);
+            const action = toUiAction(err);
+            if (action.kind === 'cooldown') runner.bumpCooldown();
+            if (action.kind === 'sign_in') router.replace('/');
+            toast.error('Could not get a quote', describeAction(action));
           },
         },
       );
     },
-    [quote, runner, selectedModelId, slider],
+    [quote, router, runner, selectedModelId, slider],
   );
 
   // PDF: a description is classified and quoted as the first prompt (New chat → ?first=1).
@@ -266,7 +270,10 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
         contextTokens={quoteFresh ? quoteData.quote.context_tokens : null}
       />
 
+      {freeUsage.data && <FreeQuotaMeter messages={freeUsage.data.messages} limit={freeUsage.data.limit} className="max-w-xs" />}
+
       <RecommendationPanel
+        freeAvailable={freeAvailable}
         data={quoteFresh ? quoteData : null}
         loading={quote.isPending}
         slider={slider}
