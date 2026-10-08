@@ -6,7 +6,8 @@ import { join } from 'node:path';
 
 const DIST = process.env.NEXT_DIST_DIR ?? '.next';
 const GZ_RATIO = 3;
-const BUDGET_GZ_KB = { '/page': 220, '/chat/[chatId]/page': 260, webglChunk: 180 };
+// WebGL: three.js core alone is ≈165 kB gz, so the lazy scene chunk budget is 230 kB gz (memory.md decision).
+const BUDGET_GZ_KB = { landing: 220, chat: 260, webglChunk: 230 };
 
 let manifest;
 try {
@@ -17,7 +18,8 @@ try {
 }
 
 const kbOf = (rel) => Math.round(statSync(join(DIST, rel)).size / 1024);
-const firstLoad = (route) => (manifest.pages?.[route] ?? []).filter((f) => f.endsWith('.js')).reduce((n, f) => n + kbOf(f), 0);
+const routeKey = (suffix) => Object.keys(manifest.pages ?? {}).find((k) => k.endsWith(suffix)) ?? suffix;
+const firstLoad = (suffix) => (manifest.pages?.[routeKey(suffix)] ?? []).filter((f) => f.endsWith('.js')).reduce((n, f) => n + kbOf(f), 0);
 
 const chunkDir = `${DIST}/static/chunks`;
 const chunks = [];
@@ -40,8 +42,8 @@ const report = (label, rawKb, gzLimit) => {
   if (!ok) fail = true;
   console.log(`${ok ? 'OK  ' : 'OVER'} ${label}: ${rawKb} kB raw ≈ ${Math.round(rawKb / GZ_RATIO)} kB gz (limit ${gzLimit} gz)`);
 };
-report('landing first-load', firstLoad('/page'), BUDGET_GZ_KB['/page']);
-report('chat first-load', firstLoad('/chat/[chatId]/page'), BUDGET_GZ_KB['/chat/[chatId]/page']);
+report('landing first-load', firstLoad('/page'), BUDGET_GZ_KB.landing);
+report('chat first-load', firstLoad('chat/[chatId]/page'), BUDGET_GZ_KB.chat);
 report('largest lazy WebGL chunk', webgl?.kb ?? 0, BUDGET_GZ_KB.webglChunk);
 console.log('top chunks:', chunks.slice(0, 4).map(({ p, kb }) => `${p.split('/').pop()}=${kb}kB`).join(', '));
 process.exit(fail ? 1 : 0);
