@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+
+# env
+.env
+.env.*
+!.env.example
+
+# build output
+.next/
+out/
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# os / editor
+.DS_Store
+*.log
+.idea/
+.vscode/
+
+# source documents stay local
+*.pdf
