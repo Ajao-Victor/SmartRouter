@@ -55,7 +55,7 @@
 **Animations:** none (keyframes only).
 **Acceptance:** `pnpm dev` shows dark page with fonts loaded; no FOUT; tokens visible in devtools.
 
-### Task 4 — Motion library and reduced-motion provider  `todo`
+### Task 4 — Motion library and reduced-motion provider  `done` (2026-10-08; commits: 3d60be7 aef9885 3760ab4 ad338ac 3d5b058 2194854 0e7a8bb fc241ad 4a6140c 1bbd197 eac60b1 ee8662a 6e3e237 a691995 e749edc 762a811 3e2ac45)
 **Files**
 - `lib/motion/springs.ts` — `snappy`, `soft`, `liquid`, `magnet` (values in `design.md` §3).
 - `lib/motion/variants.ts` — `fadeUp`, `stagger`, `holoCard`, `dock`, `hud`, `bubble`, `slideUpSheet`, `reorder`, plus `reducedFallback` (`hidden/visible/exit` opacity only).
