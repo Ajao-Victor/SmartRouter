@@ -94,6 +94,16 @@ export const sessions = {
       schema: userSessionSchema.nullable(),
       ...(signal ? { signal } : {}),
     }),
+  /**
+   * PROPOSED / mock-only: tell the API a top-up landed. The real API is expected to observe
+   * the on-chain top-up itself (Backend_Gaps_Report §3.5); this call may become a no-op.
+   */
+  notifyTopUp: (channelId: string, amountMicro: number) =>
+    apiFetch(`/api/sessions/${encodeURIComponent(channelId)}/top-up`, {
+      method: 'POST',
+      body: { amount: amountMicro },
+      schema: userSessionSchema,
+    }),
 };
 
 export const jobs = {
