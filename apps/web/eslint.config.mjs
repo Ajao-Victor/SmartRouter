@@ -1,18 +1,21 @@
 import { FlatCompat } from '@eslint/eslintrc';
-import tseslint from 'typescript-eslint';
-import jsxA11y from 'eslint-plugin-jsx-a11y';
 import importPlugin from 'eslint-plugin-import';
-import reactHooks from 'eslint-plugin-react-hooks';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
+import { config as defineConfig, configs as tsConfigs } from 'typescript-eslint';
 
 const compat = new FlatCompat({ baseDirectory: import.meta.dirname });
 
-/** Rules from rules.md §3. */
-export default tseslint.config(
+/**
+ * Rules from rules.md §3.
+ * `next/core-web-vitals` already registers the jsx-a11y, import and react-hooks plugins,
+ * so we only add their rule sets here rather than re-registering the plugins.
+ */
+export default defineConfig(
   {
     ignores: ['.next/**', 'node_modules/**', 'playwright-report/**', 'test-results/**', 'next-env.d.ts'],
   },
   ...compat.extends('next/core-web-vitals'),
-  ...tseslint.configs.strictTypeChecked,
+  ...tsConfigs.strictTypeChecked,
   {
     languageOptions: {
       parserOptions: {
@@ -21,13 +24,10 @@ export default tseslint.config(
       },
     },
   },
-  jsxA11y.flatConfigs.recommended,
-  importPlugin.flatConfigs.recommended,
-  importPlugin.flatConfigs.typescript,
   {
-    plugins: { 'react-hooks': reactHooks },
     rules: {
-      ...reactHooks.configs.recommended.rules,
+      ...jsxA11y.flatConfigs.recommended.rules,
+      ...importPlugin.flatConfigs.recommended.rules,
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-misused-promises': 'error',
       '@typescript-eslint/no-explicit-any': 'error',
@@ -50,6 +50,7 @@ export default tseslint.config(
         },
       ],
       'import/no-unresolved': 'off',
+      'import/named': 'off',
       // security.md: no raw wallet access, no localStorage for app state.
       'no-restricted-globals': [
         'error',
@@ -91,6 +92,6 @@ export default tseslint.config(
   },
   {
     files: ['*.config.ts', '*.config.js', '*.config.mjs', 'scripts/**/*.mjs'],
-    ...tseslint.configs.disableTypeChecked,
+    ...tsConfigs.disableTypeChecked,
   },
 );
