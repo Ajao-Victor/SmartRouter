@@ -41,11 +41,13 @@
 | Docs suite (12 files) | ✅ generated Oct 8, 2026 |
 | Phase 0 Alignment | ⬜ |
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
-| Phase 2 Core UI | ⬜ |
+| Phase 2 Core UI | 🟡 Task 9 done (Oct 8, 2026); Tasks 10–17 next |
 | Phase 3 Integration | ⬜ |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 9 (2026-10-08) — mock API layer (`tests/mocks/`).** MSW 2.15 added. `fixtures.ts`: demo user (NG, balanced, $2 allocation, $10/week, auto-free on), open $2 session, 14 models across all 10 PDF providers with Oct 7 prices (GLM 5.3 Flash $0.0008, Claude Opus 5.5 $0.026, Llama 3.3 70B $0.0007, gpt-oss-120b $0.0002, Sonar, FLUX, StableStudio, Suno ~$0.105, Free · Llama 3.1 8B). `state.ts`: in-memory chats/messages/quotes/sessions/requests/jobs/free usage, keyword classifier (PDF task types), price = est × context scale + 10% rounded up to $0.0001, 5-min quotes, settlement tx hash on 2nd receipt poll, jobs queued→running→done over 3 polls, seeded demo chat. `handlers.ts`: every proposed route + streaming `/run` (SSE meta/token/heartbeat/retry/file/job/done/error; 409 quote_expired, 402 allocation_exceeded / free_quota_exhausted / session_closed; prompt hooks `[retry]` `[fail]` `[slow]`; writes messages/receipts/voucher totals). Slider-weighted mock ranker returns top 2 + best quality + free with PDF-style reasons. `browser.ts`/`server.ts` entries; `MockProvider` boots the worker when `NEXT_PUBLIC_MOCK=1` and holds rendering until active; `public/mockServiceWorker.js`. Verified: lint, typecheck, 87 tests (21 files).
 
 - **Task 8 (2026-10-08) — app shell.** `app/providers.tsx` (QueryClient: staleTime 30 s, no retry on unauthorized/validation, else 1; PreferencesProvider; RouterField; GlowTrailLayer; ParticleLayer; Toaster). Root layout = Providers + `TestnetBanner` (striped strip when `NEXT_PUBLIC_TEMPO_NETWORK=testnet`). `hooks/useMe` (`/api/me`, flags `isUnauthenticated`/`isOffline`). `TopBar` (sticky glass, 28 px RouterOrb logo with heartbeat `pulseKey`, beam wordmark, GlitchText chat title, right slot for the HUD, wallet toggle → `uiStore.toggleWallet`). `AppShell` (client gate: 401 → `router.replace('/')`, skeleton while pending, offline alert, `pb-32` for the dock). Route group `(app)` with placeholder `chat`, `chat/[chatId]`, `settings`. Verified: lint, typecheck, 82 tests (20 files).
 
@@ -67,6 +69,8 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | Mock defaults to signed-in with an open $2 session | Lets the chat workspace be previewed immediately; logout/verify flip `state.authed` |
+| 2026-10-08 | Scenario hooks live in the prompt text (`[retry]`, `[fail]`, `[slow]`) | No UI toggles needed to demo failure rules from the PDF |
 | 2026-10-08 | `(app)/layout.tsx` stays a server component and delegates to a client `AppShell` | Auth state is client-only (httpOnly cookie on the API origin), so the gate must run in the browser |
 | 2026-10-08 | Lane dashes animate by offsetting the `lineDistance` attribute rather than `LineDashedMaterial.dashOffset` | `dashOffset` is not in the three 0.170 typings; attribute shift is portable |
 | 2026-10-08 | GlitchText exposes an `sr-only` copy and hides the animated layers | `role="text"` is not a valid ARIA role; one accessible copy, decorative layers |
@@ -113,6 +117,8 @@
 
 ## Assumptions currently in code
 
+- Mock `/run` reads the latest user message for scenario hooks, so the app must append the user message before calling `/run` (it does from Task 21).
+
 - `AppShell` treats only `unauthorized` as a redirect; `network` errors show an inline alert so offline users don't bounce to the landing page.
 
 - `RouterFieldScene` point count is chosen by viewport width at mount (≥1024 → 12k, else 4k); not re-evaluated on resize.
@@ -136,6 +142,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 9** (MSW mocks: fixtures, state, SSE, handlers, entries, MockProvider, 5 handler tests). Added `msw`. Next: "execute task 10".
 
 - **2026-10-08** — Executed **Task 8** (shell/providers/TopBar/AppShell/placeholders, 1 test). No new packages. Next: "execute task 9".
 
