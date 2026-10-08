@@ -18,6 +18,8 @@ export interface ThreadProps {
   messages: Message[];
   jobs?: Record<string, { status: 'queued' | 'running' | 'done' | 'failed'; result_ref: string | null; error: string | null }>;
   onRerunFree?: (messageId: string) => void;
+  /** Message ids rendered elsewhere (CompareSplit). */
+  exclude?: readonly string[];
   /** Extra content rendered below the last message (e.g. retry notices, TopUpBar). */
   children?: React.ReactNode;
 }
@@ -25,7 +27,7 @@ export interface ThreadProps {
 const WINDOW = 60;
 
 /** The conversation: auto-follows while streaming unless the user scrolled up ("Jump to latest"). */
-export function Thread({ messages, jobs = {}, onRerunFree, children }: ThreadProps) {
+export function Thread({ messages, jobs = {}, onRerunFree, exclude = [], children }: ThreadProps) {
   const reduced = useReducedMotionSafe();
   const endRef = useRef<HTMLDivElement | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -64,9 +66,11 @@ export function Thread({ messages, jobs = {}, onRerunFree, children }: ThreadPro
           </Button>
         </div>
       )}
-      {visible.map((m) => (
-        <MessageBubble key={m.id} message={m} job={jobs[m.id] ?? null} {...(onRerunFree ? { onRerunFree } : {})} />
-      ))}
+      {visible
+        .filter((m) => !exclude.includes(m.id))
+        .map((m) => (
+          <MessageBubble key={m.id} message={m} job={jobs[m.id] ?? null} {...(onRerunFree ? { onRerunFree } : {})} />
+        ))}
       {children}
       <div ref={endRef} />
       <AnimatePresence>
