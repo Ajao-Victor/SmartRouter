@@ -299,7 +299,7 @@
 - `components/chat/__tests__/errorSemantics.test.tsx`.
 **Acceptance:** each row in §5.4 has a test or a mock scenario; receipts show session id immediately and tx hash later.
 
-### Task 25 — Sentry, CSP verification, host guard, env docs  `todo`
+### Task 25 — Sentry, CSP verification, host guard, env docs  `done` (2026-10-08; commits: 338fc62 e10d6be 2756309 f5c4c8d b4b3251)
 **Files**
 - `sentry.client.config.ts`, `sentry.server.config.ts`, `instrumentation.ts` — DSN from env; `sendDefaultPii:false`; `beforeSend` scrubs prompts/addresses.
 - Verify CSP in `next.config.ts` against the real Tempo SDK origins (iframe or not → `frame-src`); record in `memory.md`.
