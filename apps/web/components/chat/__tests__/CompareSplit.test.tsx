@@ -16,7 +16,7 @@ const msg = (id: string, model: string): Message => ({
 });
 
 describe('CompareSplit', () => {
-  it('shows both replies and records the pick', () => {
+  it('shows both replies and records the pick', async () => {
     const onPick = vi.fn();
     render(
       <QueryClientProvider client={new QueryClient()}>
@@ -25,8 +25,8 @@ describe('CompareSplit', () => {
         </ReducedMotionProvider>
       </QueryClientProvider>,
     );
-    expect(screen.getByText('reply from glm')).toBeInTheDocument();
-    expect(screen.getByText('reply from opus')).toBeInTheDocument();
+    expect(await screen.findByText('reply from glm')).toBeInTheDocument();
+    expect(await screen.findByText('reply from opus')).toBeInTheDocument();
     const buttons = screen.getAllByRole('button', { name: 'Pick this one' });
     expect(buttons).toHaveLength(2);
     fireEvent.click(buttons[1] as HTMLElement);
