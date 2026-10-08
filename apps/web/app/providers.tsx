@@ -9,6 +9,7 @@ import { isApiError } from '@/lib/api/client';
 import { GlowTrailLayer } from '@/components/fx/GlowTrail';
 import { ParticleLayer } from '@/components/fx/ParticleBurst';
 import { RouterField } from '@/components/fx/RouterField';
+import { MockProvider } from '@/components/layout/MockProvider';
 import { PreferencesProvider } from '@/components/layout/PreferencesProvider';
 import { Toaster } from '@/components/ui/Toast';
 
@@ -38,7 +39,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={client}>
       <PreferencesProvider>
         <RouterField />
-        <div className="relative z-content">{children}</div>
+        <div className="relative z-content">
+          <MockProvider>{children}</MockProvider>
+        </div>
         <GlowTrailLayer />
         <ParticleLayer />
         <Toaster />
