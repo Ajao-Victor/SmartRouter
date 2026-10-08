@@ -124,7 +124,7 @@
 
 ## Phase 2 — Core UI (mock data)
 
-### Task 9 — Mock API layer for development  `todo`
+### Task 9 — Mock API layer for development  `done` (2026-10-08; commits: a720173 c59780e fe132ec e8eac04 ccf476c 32d0d7d 79f3598 f64c1b2 818d90f 23eef09 da9cf49 0313c70 63981dc e96e1fc 056962f)
 **Files**
 - `tests/mocks/fixtures.ts` — models (at least: GLM 5.3 Flash $0.0008 writing; Claude Opus 5.5 $0.026; Llama 3.3 70B $0.0007; gpt-oss-120b $0.0002; Perplexity Sonar research w/ web; FLUX dev image $0.003–$0.035; Suno music ~$0.105; Free · Llama 3.1 8B), a user (allocation 2_000_000 micro, weekly 10_000_000, slider `balanced`, auto_free_fallback true), a session (deposit 2_000_000), chats/messages, quotes with `expires_at = now+5m`, recommendations `[top1, top2, bestQuality, free]` with reason `"80% of the best quality at 1/34 of the price"`.
 - `tests/mocks/handlers.ts` — MSW handlers for every proposed endpoint + `/run` streaming `text/event-stream` with `meta`, `token`×n, `heartbeat`, `done`; variants: `retry` then success; `error` with `can_rerun_free`; `job` for music; `file` for image.
