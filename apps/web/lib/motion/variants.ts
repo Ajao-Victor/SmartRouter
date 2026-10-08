@@ -194,23 +194,29 @@ export const chip = {
   selected: { scale: 1.02, transition: springs.snappy },
 } satisfies Variants;
 
+/**
+ * Keyframe arrays must use tweens: Framer springs only support two keyframes
+ * (runtime error otherwise). These are the only multi-keyframe micro-interactions.
+ */
+const keyframeTween = { type: 'tween', duration: 0.4, ease: 'easeOut' } as const;
+
 /** Thumbs / pick: pop with overshoot. */
 export const pop = {
   idle: { scale: 1 },
-  active: { scale: [1, 1.3, 1], transition: springs.bouncy },
+  active: { scale: [1, 1.3, 1], transition: keyframeTween },
 } satisfies Variants;
 
 /** Price / balance tick: brief lift when a number changes. */
 export const tick = {
-  idle: { y: 0, color: 'inherit' },
-  up: { y: [0, -3, 0], transition: springs.snappy },
-  down: { y: [0, 3, 0], transition: springs.snappy },
+  idle: { y: 0 },
+  up: { y: [0, -3, 0], transition: { type: 'tween', duration: 0.3, ease: 'easeOut' } },
+  down: { y: [0, 3, 0], transition: { type: 'tween', duration: 0.3, ease: 'easeOut' } },
 } satisfies Variants;
 
 /** Shield lock on spend-permission approval. */
 export const lock = {
   idle: { rotate: 0, scale: 1 },
-  locked: { rotate: [0, -10, 0], scale: [1, 1.08, 1], transition: springs.bouncy },
+  locked: { rotate: [0, -10, 0], scale: [1, 1.08, 1], transition: { type: 'tween', duration: 0.5, ease: 'easeOut' } },
 } satisfies Variants;
 
 /** Shake for invalid input / rate limit. */
