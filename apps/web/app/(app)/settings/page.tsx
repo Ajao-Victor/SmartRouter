@@ -4,7 +4,7 @@ import { ExternalLink } from 'lucide-react';
 import { motion } from 'motion/react';
 
 import { addressUrl, shortHex } from '@/lib/explorer';
-import { micro } from '@/lib/money';
+import { formatUsd } from '@/lib/money';
 import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';
 import { fadeUp, stagger, withReduced } from '@/lib/motion/variants';
 
@@ -104,7 +104,7 @@ export default function SettingsPage() {
             </a>
           )}
         </p>
-        <p className="text-xs text-text-2">Balances are read live from Tempo and never stored. Allocation currently {micro(user.allocation) === user.allocation ? '' : ''}set to {String(user.allocation / 1_000_000)} USDC.e.</p>
+        <p className="text-xs text-text-2">Balances are read live from Tempo and never stored. Allocation currently set to {formatUsd(user.allocation, { min: 0 })} USDC.e.</p>
       </motion.section>
 
       <motion.section variants={withReduced(fadeUp, reduced)} className="space-y-3" aria-label="Appearance">
