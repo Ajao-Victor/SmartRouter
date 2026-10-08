@@ -8,6 +8,7 @@ import { motion } from 'motion/react';
 
 import { isApiError } from '@/lib/api/client';
 import { TASK_TYPES, type TaskType } from '@/lib/api/types';
+import { env } from '@/lib/env';
 import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';
 import { fadeUp, stagger, withReduced } from '@/lib/motion/variants';
 
@@ -85,7 +86,7 @@ export function NewChat({ initialCategory = null }: NewChatProps) {
       </motion.div>
 
       <motion.div variants={withReduced(fadeUp, reduced)} className="flex flex-wrap gap-2" aria-label="Task categories">
-        {TASK_TYPES.map((t) => (
+        {TASK_TYPES.filter((t) => t !== 'music' || env.flagMusic).map((t) => (
           <Chip
             key={t}
             tone={t === 'research' ? 'teal' : 'accent'}
