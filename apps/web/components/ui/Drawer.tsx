@@ -4,8 +4,8 @@ import { useId } from 'react';
 
 import { clsx } from 'clsx';
 
-import { useIsDesktop } from '@/lib/useMediaQuery';
 import { slideRightDrawer, slideUpSheet } from '@/lib/motion/variants';
+import { useIsDesktop } from '@/lib/useMediaQuery';
 
 import { Overlay } from '@/components/ui/Overlay';
 

@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'motion/react';
 
 import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';
 import { toast as toastVariants, withReduced } from '@/lib/motion/variants';
+
 import { useToastStore, type ToastItem } from '@/stores/toastStore';
 
 const toneClass: Record<ToastItem['tone'], string> = {
