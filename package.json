@@ -1,0 +1,14 @@
+{
+  "name": "smartrouter",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "web": "pnpm --filter @smartrouter/web",
+    "dev": "pnpm --filter @smartrouter/web dev",
+    "build": "pnpm --filter @smartrouter/web build",
+    "check": "pnpm --filter @smartrouter/web check"
+  }
+}
