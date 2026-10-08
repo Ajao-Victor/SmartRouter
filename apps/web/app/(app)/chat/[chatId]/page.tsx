@@ -1,9 +1,16 @@
-export default async function ChatPage({ params }: { params: Promise<{ chatId: string }> }) {
-  const { chatId } = await params;
+'use client';
+
+import { Suspense, use } from 'react';
+
+import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
+
+export default function ChatPage({ params }: { params: Promise<{ chatId: string }> }) {
+  const { chatId } = use(params);
+  const safe = /^[a-zA-Z0-9_-]{1,64}$/.test(chatId) ? chatId : null;
+  if (!safe) return <p className="text-sm text-signal">Invalid chat id.</p>;
   return (
-    <section className="space-y-2">
-      <p className="num text-2xs tracking-label text-text-2 uppercase">chat · {chatId}</p>
-      <p className="text-sm text-text-1">The chat workspace arrives in Task 21.</p>
-    </section>
+    <Suspense fallback={null}>
+      <ChatWorkspace chatId={safe} />
+    </Suspense>
   );
 }
