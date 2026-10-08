@@ -89,7 +89,7 @@ export default function SettingsPage() {
 
       <motion.section variants={withReduced(fadeUp, reduced)}>
         <SpendPermissionCard
-          status={permission.status}
+          status={permission.permissionStatus}
           expiresAt={permission.data?.expiresAt ?? null}
           busy={permission.approve.isPending || permission.revoke.isPending}
           onApprove={() => {
