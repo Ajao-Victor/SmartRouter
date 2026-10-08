@@ -1,0 +1,222 @@
+/**
+ * Mock data mirroring the PDF: 10 MPP providers, example models with Oct 7 live prices,
+ * a $2 default allocation, slider presets, 30 free messages/day.
+ * Money is integer micro-USD.
+ */
+import type { Model, TaskType, User, UserSession } from '@/lib/api/types';
+import { micro } from '@/lib/money';
+
+export const NOW = () => new Date().toISOString();
+
+export const mockUser: User = {
+  id: 'u_demo',
+  tempo_address: '0x7a3f9c1e5b2d4a6f8e0c1b3d5f7a9c2e4b6d8f01',
+  country: 'NG',
+  slider: 'balanced',
+  allocation: micro(2_000_000),
+  weekly_limit: micro(10_000_000),
+  auto_free_fallback: true,
+};
+
+export const mockSessionOpen = (): UserSession => ({
+  channel_id: 'ch_demo_0001',
+  user_id: mockUser.id,
+  authorized_signer: '0xsigner00000000000000000000000000000000000',
+  deposit: micro(2_000_000),
+  highest_voucher: micro(0),
+  counted: micro(0),
+  settled: micro(0),
+  last_used_at: null,
+  status: 'open',
+});
+
+const text = (over: Partial<Model> & Pick<Model, 'id' | 'provider' | 'model_name' | 'label' | 'price_est'>): Model => ({
+  adapter: 'openai-style',
+  payment: 'session',
+  task_types: ['chat', 'writing', 'coding', 'research', 'translation'],
+  quality_by_task: {},
+  latency: 900,
+  verified: true,
+  active: true,
+  ...over,
+});
+
+/** Quality is LMArena-style 0..1 per task (rescaled by the ranker). */
+export const mockModels: Model[] = [
+  text({
+    id: 'openrouter:z-ai/glm-5.3-flash',
+    provider: 'OpenRouter',
+    model_name: 'GLM 5.3 Flash',
+    label: 'GLM 5.3 Flash',
+    price_est: micro(800),
+    quality_by_task: { writing: 0.8, chat: 0.78, coding: 0.72, research: 0.6, translation: 0.74 },
+    latency: 700,
+  }),
+  text({
+    id: 'openrouter:meta-llama/llama-3.3-70b',
+    provider: 'OpenRouter',
+    model_name: 'Llama 3.3 70B',
+    label: 'Llama 3.3 70B',
+    price_est: micro(700),
+    quality_by_task: { writing: 0.74, chat: 0.76, coding: 0.68, research: 0.55, translation: 0.7 },
+    latency: 650,
+  }),
+  text({
+    id: 'openrouter:openai/gpt-oss-120b',
+    provider: 'OpenRouter',
+    model_name: 'gpt-oss-120b',
+    label: 'gpt-oss-120b',
+    price_est: micro(200),
+    quality_by_task: { writing: 0.66, chat: 0.7, coding: 0.75, research: 0.5, translation: 0.6 },
+    latency: 500,
+  }),
+  text({
+    id: 'anthropic:claude-opus-5-5',
+    provider: 'Anthropic',
+    model_name: 'claude-opus-5-5',
+    label: 'Claude Opus 5.5',
+    price_est: micro(26_000),
+    quality_by_task: { writing: 1, chat: 1, coding: 0.98, research: 0.9, translation: 0.95 },
+    latency: 2400,
+  }),
+  text({
+    id: 'anthropic:claude-sonnet-5-5',
+    provider: 'Anthropic',
+    model_name: 'claude-sonnet-5-5',
+    label: 'Claude Sonnet 5.5',
+    price_est: micro(9_000),
+    quality_by_task: { writing: 0.93, chat: 0.94, coding: 1, research: 0.85, translation: 0.9 },
+    latency: 1500,
+  }),
+  text({
+    id: 'deepseek:deepseek-chat',
+    provider: 'DeepSeek',
+    model_name: 'deepseek-chat',
+    label: 'DeepSeek V3',
+    adapter: 'locus',
+    payment: 'charge',
+    price_est: micro(4_000),
+    quality_by_task: { writing: 0.82, chat: 0.85, coding: 0.9, research: 0.65, translation: 0.8 },
+    latency: 1800,
+  }),
+  text({
+    id: 'perplexity:sonar',
+    provider: 'Perplexity',
+    model_name: 'sonar',
+    label: 'Perplexity Sonar',
+    adapter: 'locus',
+    payment: 'charge',
+    task_types: ['research', 'chat'],
+    price_est: micro(12_000),
+    quality_by_task: { research: 1, chat: 0.7 },
+    latency: 2100,
+  }),
+  text({
+    id: 'groq:llama-3.1-70b',
+    provider: 'Groq',
+    model_name: 'llama-3.1-70b-versatile',
+    label: 'Llama 3.1 70B (Groq)',
+    adapter: 'locus',
+    payment: 'charge',
+    price_est: micro(4_500),
+    quality_by_task: { writing: 0.7, chat: 0.74, coding: 0.66, translation: 0.68 },
+    latency: 320,
+  }),
+  text({
+    id: 'mistral:mistral-large',
+    provider: 'Mistral AI',
+    model_name: 'mistral-large-latest',
+    label: 'Mistral Large',
+    adapter: 'locus',
+    payment: 'charge',
+    task_types: ['chat', 'writing', 'translation'],
+    price_est: micro(6_000),
+    quality_by_task: { writing: 0.84, chat: 0.83, translation: 0.92 },
+    latency: 1200,
+  }),
+  {
+    id: 'fal:flux-dev',
+    provider: 'fal.ai',
+    model_name: 'fal-ai/flux/dev',
+    label: 'FLUX dev',
+    adapter: 'fal',
+    payment: 'charge',
+    task_types: ['image'],
+    quality_by_task: { image: 0.92 },
+    price_est: micro(25_000),
+    latency: 6000,
+    verified: true,
+    active: true,
+  },
+  {
+    id: 'fal:flux-schnell',
+    provider: 'fal.ai',
+    model_name: 'fal-ai/flux/schnell',
+    label: 'FLUX schnell',
+    adapter: 'fal',
+    payment: 'charge',
+    task_types: ['image'],
+    quality_by_task: { image: 0.78 },
+    price_est: micro(3_000),
+    latency: 2500,
+    verified: true,
+    active: true,
+  },
+  {
+    id: 'stablestudio:sd3-large',
+    provider: 'StableStudio',
+    model_name: 'sd3-large',
+    label: 'Stable Diffusion 3 Large',
+    adapter: 'stablestudio',
+    payment: 'charge',
+    task_types: ['image'],
+    quality_by_task: { image: 1 },
+    price_est: micro(39_000),
+    latency: 9000,
+    verified: true,
+    active: true,
+  },
+  {
+    id: 'suno:v4',
+    provider: 'Suno',
+    model_name: 'suno-v4',
+    label: 'Suno v4',
+    adapter: 'suno',
+    payment: 'charge',
+    task_types: ['music'],
+    quality_by_task: { music: 1 },
+    price_est: micro(105_000),
+    latency: 45_000,
+    verified: true,
+    active: true,
+  },
+  {
+    id: 'cloudflare:llama-3.1-8b',
+    provider: 'Cloudflare Workers AI',
+    model_name: '@cf/meta/llama-3.1-8b-instruct',
+    label: 'Free · Llama 3.1 8B',
+    adapter: 'cloudflare',
+    payment: 'free',
+    task_types: ['chat', 'writing', 'coding', 'research', 'translation'],
+    quality_by_task: { writing: 0.52, chat: 0.55, coding: 0.45, research: 0.35, translation: 0.5 },
+    price_est: micro(0),
+    latency: 600,
+    verified: true,
+    active: true,
+  },
+];
+
+export const FREE_MODEL_ID = 'cloudflare:llama-3.1-8b';
+
+export const SAMPLE_REPLY: Record<TaskType, string> = {
+  chat: "Here's a quick take: SmartRouter picks the model, you pay per use from your Tempo wallet, and the free model keeps you moving when the allocation runs out.",
+  writing:
+    "**Cover letter — draft**\n\nDear Hiring Team,\n\nI'm applying for the role because I build payment flows that people actually finish. At my last job I shipped a wallet onboarding that cut drop-off by 38%.\n\nI'd love to bring that to your team.\n\nWarm regards,\nAda",
+  coding:
+    "Here's the fix:\n\n```ts\nexport function roundUp(micro: number) {\n  return Math.ceil(micro / 100) * 100;\n}\n```\n\nThe bug was `Math.round`, which rounded $0.00085 down. The PDF rule is round **up** to $0.0001.",
+  research:
+    'Three sources agree:\n\n1. Tempo settles MPP sessions in USDC.e.\n2. Providers quote a fixed 402 price per request.\n3. Fees are sponsored by the merchant.\n\nSources: MPP directory · Pay-as-you-go guide · T12 upgrade notes.',
+  translation: 'Ẹ káàbọ̀ sí SmartRouter — sọ ohun tí o fẹ́ ṣe, a ó yan àwòṣe tó dára jù fún ìnáwó rẹ.',
+  image: '',
+  music: '',
+};
