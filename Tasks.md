@@ -221,7 +221,7 @@
 **Animations:** `slideUpSheet` + drag physics; flips; splash; drum-roll.
 **Acceptance:** sheet works with touch drag on mobile emulation; settings save with mock.
 
-### Task 17 — Receipt drawer and Compare split (UI)  `todo`
+### Task 17 — Receipt drawer and Compare split (UI)  `done` (2026-10-08; commits: 5cf921c fccf645 d2aba7a c5dc5dd 66599ad dfe737d 8f40506 0d2c074 80672b2 eed73f6 0a0dafa b564490)
 **Files**
 - `hooks/useReceipt.ts` — `['request', id]` (proposed); refetch every 20 s until `tx_hash` present (settlement every $1 or hourly), max 2 h.
 - `components/receipt/ReceiptDrawer.tsx` — `Drawer`; rows (`stagger`): model, price, provider cost, latency, session id (immediately), voucher amount, provider receipt, **tx hash** via `TxHashReveal` with explorer link once present (validated hex).
