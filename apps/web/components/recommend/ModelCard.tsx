@@ -92,7 +92,7 @@ export const ModelCard = forwardRef<HTMLDivElement, ModelCardProps>(function Mod
       </div>
 
       <p className="min-h-8 text-xs text-text-1">
-        <TypeLine text={rec.reason} />
+        {disabled && rec.is_free ? <span className="text-signal">Free messages for today are used up (30/30)</span> : <TypeLine text={rec.reason} />}
       </p>
 
       <QualityPriceSpeedBars quality={rec.quality} price={priceScore} speed={speedScore} />
