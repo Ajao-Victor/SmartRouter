@@ -42,10 +42,12 @@
 | Phase 0 Alignment | ⬜ |
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
 | Phase 2 Core UI | ✅ Tasks 9–17 done (Oct 8, 2026) |
-| Phase 3 Integration | 🟡 Tasks 18–21 done (Oct 8, 2026); Tasks 22–25 next |
+| Phase 3 Integration | 🟡 Tasks 18–22 done (Oct 8, 2026); Tasks 23–25 next |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 22 (2026-10-08) — model switching, suggestions, per-turn quotes, long-chat notes.** Already in the workspace from Task 21: every turn re-quotes for the current model priced on history + prompt; ModelPill/ModelPicker switch → `PATCH /api/chats/:id {current_model_id}` + re-quote with `layoutId` crossfade; SuggestionChip apply → select + re-quote; chat title glitches into the TopBar when the free model writes it. New: `ThreadNotes` (PDF rules as info notes: image/music turn inside a text chat sends only the new prompt + a one-line summary; older turns summarised by the free model; 8,000-token history cap). Verified: lint, typecheck, 138 tests (39 files).
 
 - **Task 21 (2026-10-08) — quote → allocation check → voucher → `/run` SSE.** `lib/api/sse.ts` (`runStream`: fetch + ReadableStream POST, SSE frame parser, Zod-validated `meta/token/heartbeat/retry/file/job/done/error`, 45 s heartbeat watchdog → `timeout`, abort cancels the reader; outcomes done/error/aborted). `hooks/useRun` (PDF steps 6–11: pick the recommendation (Auto = top paid pick), quote freshness → `needs_requote`, allocation check via `selectCanAfford` → auto-free ("Allocation used — continuing free") or `needs_top_up`, `no_allocation`, `free_exhausted`; optimistic user + assistant messages; `signerStore.advance` + `SessionClient.signVoucher` cumulative voucher; stream events → `streamStore`; on done: `applyVoucher`, record content/request/model, invalidate session/chats/free usage; no result → `restoreVoucher` + signer rollback, error state with rerun-free; 429 → cooldown shake; `rerunFree`). `ChatWorkspace` (Thread + TopUpBar (Top up re-runs after success; Continue free forces free) + RecommendationPanel (slider re-quote, pick/Auto run, suggestion re-quote, card refs) + ModelPicker (PATCH current model + re-quote) + Composer (stale draft → Get quote; quote ring expiry → re-quote); GlowTrail Run → chosen card → HUD; `?first=1` auto-quotes the stored draft; page title → TopBar via `uiStore.pageTitle`). `/run` body now carries `prompt` (server records both messages — PDF step 10); mock appends the user message. Chat route validates the id. Verified: lint, typecheck, 135 tests (38 files).
 
@@ -161,6 +163,8 @@
 
 ## Assumptions currently in code
 
+- `hasSummary` is derived from `chat.summary !== null`; the API's summary field is written by the worker (PDF).
+
 - SSE event payload shapes are proposed (Gaps §2.2); `can_rerun_free` defaults to false when absent.
 - `no_allocation` is surfaced as a toast pointing to the wallet; the PDF flow assumes an open allocation before paid runs.
 
@@ -206,6 +210,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 22** (ThreadNotes + workspace integration + test). No new packages. Next: "execute task 23".
 
 - **2026-10-08** — Executed **Task 21** (sse client, useRun, ChatWorkspace, chat route, prompt-in-run contract, 2 test files, 5 fixes). No new packages. Next: "execute task 22".
 
