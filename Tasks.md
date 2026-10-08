@@ -309,7 +309,7 @@
 
 ## Phase 4 — Polish and launch
 
-### Task 26 — Performance and fallbacks  `todo`
+### Task 26 — Performance and fallbacks  `done` (2026-10-08; commits: 5a67f58 9c36467 b7284e5 959c573 6bc9bef b8cbc75 3054756 d3cd62d 6879bf7 df3665f)
 - Lazy-load R3F chunks; verify budgets in `design.md` §5 with `next build` analyser; DPR cap; `frameloop="never"` on hidden tab and SDK dialogs; blur surface count ≤ 3; test on throttled mobile profile; low-end gate falls back to CSS; `saveData` honoured.
 **Acceptance:** Lighthouse mobile ≥ 80 landing, ≥ 70 chat; no jank during streaming.
 
