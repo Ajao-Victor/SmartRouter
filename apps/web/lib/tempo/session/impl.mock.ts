@@ -13,10 +13,10 @@ export class MockSessionClient implements SessionClient {
   private channels = new Map<string, ChannelStatus>();
   private counter = 0;
 
-  constructor(private readonly latencyMs = 0) {}
+  /** `_latencyMs` is accepted for API symmetry with the accounts mock but never used (no timers). */
+  constructor(_latencyMs = 0) {}
 
   openChannel(args: OpenChannelArgs): Promise<{ channelId: string }> {
-    this.latencyMs;
     this.counter += 1;
     const channelId = `ch_mock_${String(this.counter).padStart(4, '0')}`;
     this.channels.set(channelId, { channelId, depositMicro: args.maxDepositMicro, status: 'open' });
