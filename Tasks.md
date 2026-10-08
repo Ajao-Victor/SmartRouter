@@ -153,7 +153,7 @@
 **Animations:** chips `holoCard` hover; selected chip glows; list `stagger`.
 **Acceptance:** creating a chat from a category and from a description both land on the chat page.
 
-### Task 12 — Composer (FloatingDock) and ModelPill  `todo`
+### Task 12 — Composer (FloatingDock) and ModelPill  `done` (2026-10-08; commits: 22b253d 4192b6d f487955 322463d c90fb56 804dc66 3475952 21adecd)
 **Files**
 - `components/chat/Composer.tsx` — `FloatingDock`; textarea auto-grow (max 6 rows); `Cmd/Ctrl+Enter` submits; attach button (allowlist from `security.md` §6; shows chips with remove); `ModelPill`; `CompareToggle` (flag); `RunButton`. Modes: `new` (no model yet → "Get quote") and `chat` (`Run · $0.0008` with `QuoteRing`).
 - `components/chat/ModelPill.tsx` — current model label + "via MPP" or "Free · Llama 3.1 8B" (green); tap → `uiStore.openDialog('modelPicker')`.
