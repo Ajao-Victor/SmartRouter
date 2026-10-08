@@ -40,12 +40,14 @@
 |---|---|
 | Docs suite (12 files) | ✅ generated Oct 8, 2026 |
 | Phase 0 Alignment | ⬜ |
-| Phase 1 Setup | 🟡 Tasks 1–6 done (Oct 8, 2026); Tasks 7–8 next |
+| Phase 1 Setup | 🟡 Tasks 1–7 done (Oct 8, 2026); Task 8 next |
 | Phase 2 Core UI | ⬜ |
 | Phase 3 Integration | ⬜ |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 7 (2026-10-08) — FX layer (`components/fx/`).** `GlitchText` (base blur-in + two hue-shifted clip-path slices tearing for 600 ms, sr-only text for AT, plain text under reduced motion). `HoloCard` (glass/dashed card, `useTilt` ±8° on magnet springs, pointer-following radial spotlight via `useMotionTemplate`, rotating conic beam ring when selected, holoCard/teal/free variants). `LiquidRing` (SVG meter: liquid rect on the liquid spring, surface wobble from animated `feTurbulence` seed + `feDisplacementMap`, colour by `data-state` → `--ring`, hud variants ok/low/used/toppingUp). `GlowTrail` (`useGlowTrail()` draws a gradient beam through element centres as quadratic curves; `pathLength` 0→1 then fade; `GlowTrailLayer` fixed SVG at z-dock; ≤4 trails). `ParticleBurst` (`ParticleLayer` singleton canvas 2D at DPR ≤1.5, ≤120 particles, gravity + glow; `useParticleBurst()` + `burstAt(e)`; no-op under reduced motion). `FloatingDock` (glass dock on `dock-float`, lift on focus, drag up 24 px with snap-to-origin, cooldown shake on `shakeKey`). `RouterOrb` (R3F `MeshTransmissionMaterial` icosahedron + emissive core + teal nucleus, rotation/breathing scale by activity, one-shot pulse on `pulseKey`; CSS radial orb with pulseLoop fallback). `RouterField` (R3F points 12k desktop / 4k mobile displaced by GLSL simplex noise with `uTime/uActivity/uMouse`, additive soft-disc fragments, six dashed lanes animated by shifting `lineDistance`; always layered over the CSS field fallback + grid + noise; pauses on hidden tab / SDK dialog). `stores/fxStore` bus. Root layout mounts RouterField, GlowTrailLayer, ParticleLayer. Dev gallery `/dev/fx`. Verified: lint, typecheck, 81 tests (19 files), build (home 149 kB first-load; R3F scenes in lazy chunks; `/dev/fx` 168 kB).
 
 - **Task 6 (2026-10-08) — UI primitives (`components/ui/`).** `Button` (cva: primary = beam gradient + accent glow + hover sheen sweep; secondary = glass; ghost; danger = deliberately plain; free = green glow; sizes sm/md/lg/icon with 44 px hit targets; hover lift on magnet spring, tap compress on snappy, spinning ring while loading). `MagneticButton` (8 px pointer pull via `useMagnetic`). `NumberTicker` (fx; snappy spring between values, `tick` lift up/down, aria-live) + `PriceTag` (mono tabular, tone price/free/neutral/signal, "Free" label at zero). `Chip` (glass pill, `chip` variants, tone glows accent/free/quality/teal/neutral, `data-selected` + `aria-pressed`). `Slider` (mechanical detents: thumb follows pointer on a motion value, snaps to nearest detent on a snappy spring, bouncy "click" on each snap, beam track teal→violet→blue, detent ticks, keyboard ←/→/Home/End, `role=slider` + valuetext). `Input`/`Textarea` (glass field, focus glow, signal glow + `shake` on error, aria-describedby). `Overlay` engine (Portal, dimmed blurred backdrop, `useFocusTrap`, Escape, body scroll lock, velocity/travel drag dismiss from `dragPhysics`, never mounts while `uiStore.sdkDialogOpen`). `Sheet` (mobile bottom sheet on liquid spring with grab handle / desktop right panel on heavy spring; z-sheet 40), `Dialog` (centred blur-in on snappy spring, accent glow; z-sheet), `Drawer` (z-drawer 30 so wallet can open above receipts). `toastStore` + `Toaster` (bouncy entrance, tone glows, top-centre mobile / bottom-right desktop, max 4, `toast.success/error/...` helpers). `Skeleton` (shimmer sweep), `Tooltip` (fadeScale), `Attribution` (verbatim licence line). Support: `lib/a11y/useFocusTrap`, `lib/useMediaQuery` (`useSyncExternalStore`, server = mobile), `components/ui/Portal`. Dev gallery `/dev/primitives`. Verified: lint, typecheck, 72 tests (15 files), build (gallery 158 kB first-load).
 
@@ -63,6 +65,10 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | Lane dashes animate by offsetting the `lineDistance` attribute rather than `LineDashedMaterial.dashOffset` | `dashOffset` is not in the three 0.170 typings; attribute shift is portable |
+| 2026-10-08 | GlitchText exposes an `sr-only` copy and hides the animated layers | `role="text"` is not a valid ARIA role; one accessible copy, decorative layers |
+| 2026-10-08 | FX imperative APIs (trails, bursts) go through `fxStore` with singleton layers mounted in the root layout | Any component can fire effects without prop-drilling refs; one canvas, one SVG |
+| 2026-10-08 | RouterField always renders the CSS fallback underneath the WebGL canvas | First paint and low-end devices stay on-brand; WebGL only adds |
 | 2026-10-08 | One `Overlay` engine behind Sheet/Dialog/Drawer | Focus trap, Escape, scroll lock, drag dismiss and the SDK-dialog guard are written once |
 | 2026-10-08 | `Slider` is a generic detent primitive; Task 13 wraps it with preset labels/weights | Same mechanical feel reusable for Settings default slider |
 | 2026-10-08 | `NumberTicker` moved up from Task 7 into Task 6 | PriceTag depends on it |
@@ -104,6 +110,9 @@
 
 ## Assumptions currently in code
 
+- `RouterFieldScene` point count is chosen by viewport width at mount (≥1024 → 12k, else 4k); not re-evaluated on resize.
+- Orb/field activity comes from `streamStore.selectActivity` (share of live streams); will read real SSE state from Task 21.
+
 - `composerStore.MAX_UPLOAD_BYTES` = 10 MB and the MIME allowlist (png, jpeg, webp, text/plain, pdf) are placeholders pending Backend_Gaps_Report §7.
 - `allocationStore` derives remaining = `deposit − highest_voucher` (PDF fields); `counted`/`settled` are not used client-side yet.
 - IndexedDB persistence is untested in Vitest (jsdom has no IndexedDB; the adapter no-ops). Manual browser check needed once Settings exposes the toggles (Task 16).
@@ -122,6 +131,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 7** (12 FX source files, 4 test files, dev gallery, 4 follow-up fixes). No new packages. Dev-server command given to the user; builds skipped while :3000 is in use. Next: "execute task 8".
 
 - **2026-10-08 (session 7)** — Executed **Task 6** (17 primitives/support files, 4 test files, dev gallery). No new packages. Next: "execute task 7" (FX layer: GlitchText, HoloCard, LiquidRing, GlowTrail, ParticleBurst, FloatingDock, RouterOrb, RouterField).
 
