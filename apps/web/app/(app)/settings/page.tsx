@@ -8,6 +8,7 @@ import { formatUsd } from '@/lib/money';
 import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';
 import { fadeUp, stagger, withReduced } from '@/lib/motion/variants';
 
+import { useAuth } from '@/hooks/useAuth';
 import { useMe } from '@/hooks/useMe';
 import { useSettings } from '@/hooks/useSettings';
 import { toast } from '@/stores/toastStore';
@@ -16,6 +17,7 @@ import { useUiStore } from '@/stores/uiStore';
 
 import { PresetSlider } from '@/components/recommend/Slider';
 import { Attribution } from '@/components/ui/Attribution';
+import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Switch } from '@/components/ui/Switch';
 import { AllocationControls } from '@/components/wallet/AllocationControls';
@@ -25,6 +27,7 @@ export default function SettingsPage() {
   const reduced = useReducedMotionSafe();
   const me = useMe();
   const settings = useSettings();
+  const auth = useAuth();
   const theme = useUiStore((s) => s.theme);
   const setTheme = useUiStore((s) => s.setTheme);
   const forceReduced = useUiStore((s) => s.forceReducedMotion);
@@ -111,6 +114,25 @@ export default function SettingsPage() {
         <p className="num text-2xs tracking-wider-ui text-text-2 uppercase">Appearance</p>
         <Switch label="Light theme" checked={theme === 'light'} onChange={(on) => { setTheme(on ? 'light' : 'dark'); }} className="glass rounded-lg p-3" />
         <Switch label="Reduce motion" description="Opacity-only transitions, no WebGL" checked={forceReduced} onChange={setForceReduced} className="glass rounded-lg p-3" />
+      </motion.section>
+
+      <motion.section variants={withReduced(fadeUp, reduced)} className="space-y-2" aria-label="Account">
+        <p className="num text-2xs tracking-wider-ui text-text-2 uppercase">Account</p>
+        <Button
+          variant="danger"
+          size="sm"
+          loading={auth.signOut.isPending}
+          onClick={() => {
+            auth.signOut.mutate(undefined, {
+              onSettled: () => {
+                window.location.assign('/');
+              },
+            });
+          }}
+        >
+          Sign out
+        </Button>
+        <p className="text-xs text-text-2">Signing out clears this device&apos;s session. Your allocation stays open until it is idle for 24 h.</p>
       </motion.section>
 
       <motion.footer variants={withReduced(fadeUp, reduced)} className="space-y-1 text-xs text-text-2">
