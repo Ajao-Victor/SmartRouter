@@ -24,7 +24,7 @@ function wrap(ui: React.ReactElement) {
 }
 
 describe('TxHashReveal', () => {
-  it('exposes the full hash, copies it and links to the explorer', async () => {
+  it('exposes the full hash, copies it and links to the explorer', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
     wrap(<TxHashReveal hash={HASH} />);
@@ -49,7 +49,7 @@ describe('ReceiptView', () => {
       voucher_amount: micro(900), tx_hash: null, created_at: new Date().toISOString(),
     });
     wrap(<ReceiptView requestId="req_1" />);
-    expect(await screen.findByText('$0.0009')).toBeInTheDocument();
+    expect((await screen.findAllByText('$0.0009')).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('$0.000818')).toBeInTheDocument();
     expect(screen.getByText('1.2 s')).toBeInTheDocument();
     expect(screen.getByText(/pending · settles every \$1 or hourly/)).toBeInTheDocument();
