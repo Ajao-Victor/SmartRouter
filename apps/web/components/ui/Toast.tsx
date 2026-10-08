@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 
-import clsx from 'clsx';
+import { clsx } from 'clsx';
 import { AnimatePresence, motion } from 'motion/react';
 
 import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';

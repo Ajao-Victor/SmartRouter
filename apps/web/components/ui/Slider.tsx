@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
-import clsx from 'clsx';
+import { clsx } from 'clsx';
 import { motion, useMotionValue, useSpring, useTransform } from 'motion/react';
 
 import { springValues } from '@/lib/motion/springs';

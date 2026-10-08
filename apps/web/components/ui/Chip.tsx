@@ -3,7 +3,7 @@
 import { forwardRef } from 'react';
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import clsx from 'clsx';
+import { clsx } from 'clsx';
 import { motion, type HTMLMotionProps } from 'motion/react';
 
 import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';

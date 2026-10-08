@@ -1,6 +1,6 @@
 'use client';
 
-import clsx from 'clsx';
+import { clsx } from 'clsx';
 
 import { formatUsd, toUsd, type MicroUsd } from '@/lib/money';
 

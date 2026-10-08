@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 
-import clsx from 'clsx';
+import { clsx } from 'clsx';
 import { AnimatePresence, motion, type PanInfo, type Variants } from 'motion/react';
 
 import { useFocusTrap } from '@/lib/a11y/useFocusTrap';
