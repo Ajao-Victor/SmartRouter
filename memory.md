@@ -40,12 +40,14 @@
 |---|---|
 | Docs suite (12 files) | ✅ generated Oct 8, 2026 |
 | Phase 0 Alignment | ⬜ |
-| Phase 1 Setup | 🟡 Tasks 1–3 done (Oct 8, 2026); Tasks 4–8 next |
+| Phase 1 Setup | 🟡 Tasks 1–4 done (Oct 8, 2026); Tasks 5–8 next |
 | Phase 2 Core UI | ⬜ |
 | Phase 3 Integration | ⬜ |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 4 (2026-10-08) — motion architecture.** `lib/motion/springs.ts`: seven springs — snappy (500/32/0.6), soft (170/26), liquid (90/18/1.2), magnet (300/20), bouncy (420/14/0.8), glide (120/30), heavy (60/20/1.6) — as both `Transition` objects and `useSpring` option sets; tween-only exits (`fast` 0.18 s, `base` 0.25 s); `instant`; `dragPhysics` (elastic 0.12, dismiss at 500 px/s or 40% travel). `lib/motion/variants.ts`: entrances (`fadeIn`, `fadeUp` with blur lift, `fadeScale`, `blurIn`, `revealItem`), `stagger()` factory with reversed exits + `staggerWords`, surfaces (`holoCard` rest/hover/selected/tap + teal/free twins, `dock` idle/focused/cooldown-shake, `hud` ok/low-pulse/used/toppingUp-spin), messages (`bubble` hidden/streaming/done/error-shake/retrying-pulse, `tokenBatch`), sheets (`slideUpSheet` liquid, `slideRightDrawer` heavy, `dialog`, `backdrop`, `toast` bouncy), micro-interactions (`chip`, `pop`, `tick`, `lock`, `shake`), reveals (`circleReveal`, `wipeLeft/Right`, `collapseLoser`, `meetFromLeft/Right`), loops (`floatLoop`, `pulseLoop`), `reorderLayout` (layout + glide), and `withReduced()` which strips transforms/filters/clip-paths/springs, collapses keyframes, kills infinite loops and keeps opacity on 0.18 s fades; `pick()` for whole-set swaps. `components/layout/ReducedMotionProvider.tsx`: context + `MotionConfig` combining OS preference, Save-Data (read after mount, no hydration mismatch) and an app `forceReduced` prop (uiStore hookup in Task 5). `useReducedMotionSafe`, `capabilities.ts` (`canUseWebGL` = webgl2 ∧ cores ≥ 4 ∧ ¬reduced ∧ ¬saveData, memoised; `MAX_DPR` 1.5), `useTilt` (±8° on magnet springs + spotlight position), `useMagnetic` (8 px pull). Root layout wrapped in the provider; placeholder home now uses `staggerWords`/`revealItem`/`fadeUp`/`floatLoop` through `withReduced`. Verified: lint, typecheck, 37 tests (6 files), build (home 144 kB first-load JS).
 
 - **Task 3 (2026-10-08) — design system foundation.** `styles/tokens.css`: full dark token set + `[data-theme='light']` overrides, registered `@property --angle` / `--level`, beam/conic/slider gradients, glow shadows (accent, teal, free, signal, warn, dock, sheet), radii, z-index contract (field 0 · content 10 · dock 20 · drawer 30 · sheet 40 · toast 50), easings/durations. `styles/animations.css`: 15 keyframes (hue-drift, float, breathe, spin-angle, shimmer, stripes, caret, pulse-soft, scanline, grid-drift, glitch-a/b, ripple, spin-slow). `app/globals.css`: Tailwind v4 `@theme inline` mapping (colours, display type scale `text-display-sm/display/display-lg`, `text-2xs`, tracking, glow shadows, `animate-*`), custom variants (`hocus`, `motion-ok`, `reduced`, `light`, `selected`, `streaming`), and 30+ utilities (`num`, `glass`, `glass-strong`, `text-beam`, `bg-beam`, `bg-beam-soft`, `bg-slider-track`, `conic-border(-ring/-mask)`, `shimmer-line`, `dashed-card`, `bg-field-fallback`, `bg-grid-field`, `bg-noise`, `bg-stripes-warn`, `caret-stream`, `scanline-once`, `glitch-text`, `dock-float`, `z-field…z-toast`, `hit-44`, `scrollbar-none`, `perspective-900`, `preserve-3d`); global reduced-motion kill-switch. `lib/fonts.ts`: Space Grotesk (display), Inter (UI), JetBrains Mono (numbers/code) via next/font. Root layout stacks field + grid + noise backdrops. Dev-only `/dev/tokens` gallery (404 in production). Verified: lint, typecheck, 23 tests, `next build` clean (home 142 kB first-load JS, CSS 33 kB).
 
@@ -57,6 +59,10 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | Springs for every state change; tweens only for exits | Physics feel per design mandate; spring tails on unmount would linger |
+| 2026-10-08 | HUD colour via `data-state` CSS, not CSS-variable keys inside variants (deviation from design.md's `--ring` sketch) | Framer can't reliably interpolate `var()` inside box-shadow strings; CSS handles colour, Framer handles scale/rotate |
+| 2026-10-08 | Reduced motion = opacity-only fades via `withReduced()`, never "no animation"; `MotionConfig reducedMotion="user"` as a second guard | Accessibility without a dead UI; OS pref still strips transforms Framer-side |
+| 2026-10-08 | `useTilt`/`useMagnetic` return bindings (ref, style, handlers) instead of components | Lets Task 6 `MagneticButton` and Task 7 `HoloCard` wrap any element |
 | 2026-10-08 | Tailwind v4 CSS-first: theme, variants and utilities live in `app/globals.css` + `styles/*.css`; `tailwind.config.ts` only scopes content | v4 convention; `@theme inline` keeps `var()` references so `[data-theme='light']` swaps every utility |
 | 2026-10-08 | Elevation = glow + hairline shadows only; no drop shadows | design.md material language; reads well on OLED mobile |
 | 2026-10-08 | Dark is native (`<html data-theme="dark">`); light is an override block, not a separate stylesheet | Hackathon immersion; light remains available for demos/judges |
@@ -85,6 +91,8 @@
 
 ## Assumptions currently in code
 
+- `ReducedMotionProvider` ignores Save-Data on the server and first paint (reads it in an effect) to avoid hydration mismatch; a one-frame full-motion flash is possible on Save-Data devices.
+
 - `lib/api/client.ts` status→code map (Gaps §2.5 unconfirmed): 401 unauthorized · 402 allocation_exceeded · 404 not_found · 409 quote_expired · 400/422 validation · 429 rate_limited (+`Retry-After`) · 5xx server. A `code` field in the API error body overrides the mapping.
 - `lib/api/endpoints.ts`: every route except `/run` is proposed (Gaps §1). `/run` path is `/run` not `/api/run` until confirmed.
 - `lib/api/types.ts`: voucher payload assumed `{channel_id, cumulative_amount, signature}` (Gaps §3.2); `sessions.current` may return `null`; `free.usage.limit` defaults to 30; money fields are integer micro-USD numbers (Gaps §4.3).
@@ -97,6 +105,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08 (session 5)** — Executed **Task 4** (springs, variants, reduced-motion provider/hook, WebGL gate, tilt/magnetic hooks, 14 new tests). jsdom canvas stubbed in test setup. No new packages. Next: "execute task 5" (Zustand stores; wire `uiStore.forceReducedMotion` into the provider).
 
 - **2026-10-08 (session 4)** — Executed **Task 3** (tokens, keyframes, Tailwind theme + utility layer, fonts, layout backdrops, dev token gallery). Pinned `outputFileTracingRoot` to the monorepo. No new packages. Next: "execute task 4" (motion library + reduced-motion provider).
 
