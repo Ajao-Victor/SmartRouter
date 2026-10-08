@@ -43,9 +43,11 @@
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
 | Phase 2 Core UI | ✅ Tasks 9–17 done (Oct 8, 2026) |
 | Phase 3 Integration | ✅ Tasks 18–25 done (Oct 8, 2026) |
-| Phase 4 Polish | 🟡 Tasks 26–27 done (Oct 8, 2026); Tasks 28–29 next |
+| Phase 4 Polish | 🟡 Tasks 26–28 done (Oct 8, 2026); Task 29 next |
 
 ## Completed features
+
+- **Task 28 (2026-10-08) — e2e demo path and rehearsal.** `tests/e2e/demo.spec.ts` walks the PDF path on mocks — sign in → deposit ($12.50 → $14.50) → Open allocation · $2 (mock approval → channel → `POST /api/sessions`, HUD "Allocation: $2.00 remaining of $2.00") → task → four options with attribution → Auto run → "via MPP" reply with Receipt → receipt drawer shows the session → HUD Top up $2 → "Topped up". Passes on the `mobile` (Pixel 7) and `desktop` (1280×800) projects; `playwright.config.ts` boots `next dev -p 3100` with `NEXT_DIST_DIR=.next-e2e` so it never collides with `pnpm dev`. `E2E_VIDEO=1` / `pnpm test:e2e:record` records the desktop walk-through (≈ 70 s, ≈ 10 MB webm under `test-results/`, gitignored) as the timing reference; `docs/demo-script.md` has the 3-minute choreography plus rehearsal notes. Fixes found by the rehearsal: multi-keyframe variants use tweens (springs only take two keyframes); the browser mock now starts with **no allocation** so the demo opens one and the browser holds the voucher signer (the seeded open session made every paid run fail with "No allocation signer"); Next's tsconfig rewrite stopped by including the `.next-build`/`.next-e2e` type dirs. Verified: lint, typecheck, 145 tests (43 files), e2e 2/2 (twice).
 
 - **Task 27 (2026-10-08) — accessibility and copy pass.** `LiveRegion` (single polite region: "Streaming reply…", "Done — {model}", "Allocation used — Top up"). HoloCard focus ring; chips 44 px on coarse pointers; slider detent ticks made decorative (fixed an axe `nested-interactive`). `axe-core` audit test (serious/critical) over the landing page and the money components (recommendations, top-up bar, allocation controls, spend permission) — zero violations (colour-contrast rule skipped in jsdom; tokens were chosen ≥ 4.5:1). Copy audit confirmed verbatim PDF strings: "Allocation used — Top up $2", "Continue free", "Free · Llama 3.1 8B", "80% of the best quality at 1/34 of the price", "Quality data: LMArena, Artificial Analysis" (under every recommendation, landing, settings), "available via MPP", "Coming soon". Keyboard: Esc on every overlay, ⌘/Ctrl+Enter, slider arrows/Home/End. Verified: lint, typecheck, 145 tests (43 files).
 
@@ -180,7 +182,9 @@
 
 ## Assumptions currently in code
 
-- Budget gz figures are estimated as raw/3; Lighthouse runs (design.md §5) need a browser and are deferred to the demo rehearsal (Task 28).
+- Budget gz figures are estimated as raw/3; Lighthouse runs (design.md §5) still need a manual browser pass (not automated in Task 28).
+
+- `signerStore` is not persisted: a page reload mid-session drops the channel id, so paid runs fail with "No allocation signer" while the API still reports the session open and the wallet offers only Top up. Fix later = persist the public bookkeeping (IndexedDB like `uiStore`) and reconcile `cumulative` with the session's `highest_voucher` on hydrate; the key itself already survives in IndexedDB. On mocks a reload resets everything (consistent), so the demo simply must not reload mid-take.
 
 - `withSentryConfig` source-map upload is not wired (no auth token); client errors still report with the DSN.
 
@@ -236,6 +240,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Resumed after a terminal crash: audited git (six post-Task-27 commits were Task 28 work in progress), committed the dangling tsconfig change, then executed **Task 28** (e2e passes mobile + desktop, recording mode, mock seeds no allocation, demo-script rehearsal notes). No new packages. Next: "execute task 29".
 
 - **2026-10-08** — Executed **Task 27** (live region, focus/hit-target fixes, axe + live-region tests, slider a11y fix). Added `axe-core`. Next: "execute task 28".
 
