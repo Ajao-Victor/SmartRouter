@@ -143,7 +143,7 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
       </div>
     );
   }
-  if (chat.isError || !chat.data) {
+  if (chat.isError) {
     return <p role="alert" className="text-sm text-signal">Could not load this chat.</p>;
   }
 
@@ -223,7 +223,7 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
       <Composer
         ref={runRef}
         mode="chat"
-        quote={chosenRec ? { price: chosenRec.price, expiresAt: quoteData.quote.expires_at, isFree: chosenRec.is_free } : null}
+        quote={chosenRec && quoteData ? { price: chosenRec.price, expiresAt: quoteData.quote.expires_at, isFree: chosenRec.is_free } : null}
         currentModel={currentModel ? { label: currentModel.label, isFree: currentModel.isFree } : null}
         onGetQuote={(prompt) => {
           getQuote(prompt);
