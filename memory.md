@@ -41,11 +41,13 @@
 | Docs suite (12 files) | ✅ generated Oct 8, 2026 |
 | Phase 0 Alignment | ⬜ |
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
-| Phase 2 Core UI | 🟡 Tasks 9–11 done (Oct 8, 2026); Tasks 12–17 next |
+| Phase 2 Core UI | 🟡 Tasks 9–12 done (Oct 8, 2026); Tasks 13–17 next |
 | Phase 3 Integration | ⬜ |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 12 (2026-10-08) — Composer.** `Composer` (FloatingDock that lifts on focus and shakes on `cooldownKey`; auto-growing textarea to 6 rows; ⌘/Ctrl+Enter; attachment picker with the security.md allowlist, rejection toasts, removable chips; `ModelPill`; Compare chip behind `NEXT_PUBLIC_FLAG_COMPARE`; `RunButton`). `RunButton` (MagneticButton: "Get quote" when unquoted; "Run · $price" with `QuoteRing` when quoted; green when free; teal/green burst on tap; parent owns the GlowTrail). `QuoteRing` (SVG countdown over the 5-minute TTL, amber ≤ 60 s, `onExpired` at 0, `role=timer`). `ModelPill` ("{label} · via MPP" / "Free · Llama 3.1 8B" / "Auto · top pick"; `layoutId` crossfade; opens the picker). `ModelPicker` (Sheet: recommended HoloCards for the prompt, then the catalog grouped by provider labelled "available via MPP", search). `hooks/useModels`. Verified: lint, typecheck, 95 tests (24 files).
 
 - **Task 11 (2026-10-08) — chat list + new chat.** `hooks/useChats` (list query; `useCreateChat` mutation prepends to the cache). `ChatList` (stagger of tilting HoloCard rows: GlitchText title, task chip, `PriceTag` spend with Free label, message count; keyboard-navigable `role=link`). `NewChat` (seven PDF category chips bound to `composerStore.category`, "Or describe the task" textarea with ⌘/Ctrl+Enter, MagneticButton "Start chat" / "Get a quote"; a description creates the chat with `first_prompt`, stores the draft and routes to `/chat/:id?first=1` so the workspace auto-quotes it — PDF: classified and quoted as the first prompt). New-chat page reads `?category=` (Zod-validated) inside a Suspense boundary and lists recent chats. Fixed `apiFetch`'s schema generic (`ZodType<T, ZodTypeDef, unknown>`) so branded micro-USD survives inference. Verified: lint, typecheck, 91 tests (22 files).
 
@@ -73,6 +75,7 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | Composer is controlled by `composerStore` (draft/attachments) and emits `onGetQuote(prompt)` / `onRun()`; quoting and running live in the workspace (Task 21) | Keeps the dock reusable for new-chat and chat modes |
 | 2026-10-08 | `?first=1` marks a chat created from a description; the workspace (Task 21) auto-fires the first quote from the stored draft | Matches the PDF: the description is quoted immediately so the user can run it straight away |
 | 2026-10-08 | CTAs are buttons that `router.push`, not Links inside buttons | Avoids nested interactive elements; MagneticButton stays a real button |
 | 2026-10-08 | Sign-in CTA shows a toast until Task 18 | Keeps the landing demoable on mocks without a fake auth flow |
@@ -151,6 +154,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 12** (Composer, RunButton, QuoteRing, ModelPill, ModelPicker, useModels, 2 test files). No new packages. Next: "execute task 13".
 
 - **2026-10-08** — Executed **Task 11** (useChats, ChatList, NewChat, page, tests; apiFetch generic fix). No new packages. Next: "execute task 12".
 
