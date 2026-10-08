@@ -19,6 +19,12 @@ export interface StreamError {
   canRerunFree: boolean;
 }
 
+export interface StreamResult {
+  priceMicro: number;
+  latencyMs: number | null;
+  requestId: string | null;
+}
+
 export interface StreamEntry {
   tokens: string[];
   status: StreamStatus;
@@ -30,6 +36,7 @@ export interface StreamEntry {
   file: StreamFile | null;
   jobId: string | null;
   error: StreamError | null;
+  result: StreamResult | null;
   startedAt: number;
 }
 
@@ -47,7 +54,7 @@ export interface StreamActions {
   retry: (messageId: string, retry: StreamRetry) => void;
   file: (messageId: string, file: StreamFile) => void;
   job: (messageId: string, jobId: string) => void;
-  done: (messageId: string) => void;
+  done: (messageId: string, result?: StreamResult) => void;
   fail: (messageId: string, error: StreamError) => void;
   clear: (messageId: string) => void;
   clearAll: () => void;
@@ -64,6 +71,7 @@ function blank(modelId: string | null, now: number): StreamEntry {
     file: null,
     jobId: null,
     error: null,
+    result: null,
     startedAt: now,
   };
 }
@@ -107,8 +115,8 @@ export const useStreamStore = create<StreamState & StreamActions>()((set) => ({
   job: (messageId, jobId) => {
     set((s) => patch(s, messageId, () => ({ jobId })));
   },
-  done: (messageId) => {
-    set((s) => patch(s, messageId, () => ({ status: 'done' })));
+  done: (messageId, result) => {
+    set((s) => patch(s, messageId, () => ({ status: 'done', result: result ?? null })));
   },
   fail: (messageId, error) => {
     set((s) => patch(s, messageId, () => ({ status: 'error', error })));
