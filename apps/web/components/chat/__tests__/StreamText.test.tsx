@@ -9,9 +9,9 @@ beforeEach(() => {
 });
 
 describe('StreamText', () => {
-  it('renders history as markdown when there is no live stream', () => {
+  it('renders history as markdown when there is no live stream', async () => {
     render(<StreamText messageId="m0" content={'**bold** and `code`'} />);
-    expect(screen.getByText('bold').tagName).toBe('STRONG');
+    expect((await screen.findByText('bold')).tagName).toBe('STRONG');
     expect(screen.getByText('code').tagName).toBe('CODE');
   });
 
@@ -32,13 +32,13 @@ describe('StreamText', () => {
     act(() => {
       useStreamStore.getState().done('m1');
     });
-    expect(screen.getByText('world').tagName).toBe('STRONG');
+    expect((await screen.findByText('world')).tagName).toBe('STRONG');
   });
 
-  it('sanitises raw HTML in model output', () => {
+  it('sanitises raw HTML in model output', async () => {
     render(<StreamText messageId="m2" content={'Hello <script>alert(1)</script> <b onclick="x">safe</b> <img src=x onerror=alert(1)>'} />);
+    expect(await screen.findByText(/safe/)).toBeInTheDocument();
     expect(document.querySelector('script')).toBeNull();
     expect(document.querySelector('img')).toBeNull();
-    expect(screen.getByText(/safe/)).toBeInTheDocument();
   });
 });
