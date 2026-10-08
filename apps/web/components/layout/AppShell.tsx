@@ -113,7 +113,7 @@ export function AppShell({ children, title, right }: AppShellProps) {
             },
           }}
           permission={{
-            status: permission.status,
+            status: permission.permissionStatus,
             expiresAt: permission.data?.expiresAt ?? null,
             busy: permission.approve.isPending || permission.revoke.isPending,
             onApprove: () => {
