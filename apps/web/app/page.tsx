@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 
-import { toast } from '@/stores/toastStore';
+import { useAuth } from '@/hooks/useAuth';
 
 import { ComingSoonTeasers } from '@/components/landing/ComingSoonTeasers';
 import { Hero } from '@/components/landing/Hero';
@@ -14,9 +14,14 @@ import { Button } from '@/components/ui/Button';
 
 export default function HomePage() {
   const router = useRouter();
-  // Task 18 replaces this with the Tempo Accounts SDK passkey flow.
+  const auth = useAuth();
+  // Tempo passkey dialog → SIWE → cookie → app.
   const onSignIn = () => {
-    toast.info('Passkey sign-in arrives in Task 18', 'Start a task to preview the chat on mock data.');
+    auth.signIn.mutate(undefined, {
+      onSuccess: () => {
+        router.push('/chat');
+      },
+    });
   };
 
   return (
@@ -26,7 +31,7 @@ export default function HomePage() {
           Smart<span className="text-beam">Router</span>
         </span>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onSignIn}>
+          <Button variant="ghost" size="sm" onClick={onSignIn} loading={auth.signIn.isPending}>
             Sign in
           </Button>
           <Button
@@ -41,7 +46,7 @@ export default function HomePage() {
         </div>
       </header>
       <main className="space-y-20 pb-24">
-        <Hero onSignIn={onSignIn} />
+        <Hero onSignIn={onSignIn} signingIn={auth.signIn.isPending} />
         <TaskChips />
         <SavingProof />
         <ProofStrip />
