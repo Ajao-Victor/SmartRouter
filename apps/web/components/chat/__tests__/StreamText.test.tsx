@@ -17,7 +17,7 @@ describe('StreamText', () => {
 
   it('appends tokens in order while streaming, then renders markdown on done', async () => {
     useStreamStore.getState().start('m1');
-    render(<StreamText messageId="m1" content="" />);
+    const { container } = render(<StreamText messageId="m1" content="" />);
     await act(async () => {
       useStreamStore.getState().appendTokens('m1', ['Hello', ' ']);
       await new Promise((r) => requestAnimationFrame(() => { r(null); }));
@@ -26,7 +26,9 @@ describe('StreamText', () => {
       useStreamStore.getState().appendTokens('m1', ['**world**']);
       await new Promise((r) => requestAnimationFrame(() => { r(null); }));
     });
-    expect(screen.getByText(/Hello/)).toHaveAttribute('aria-busy', 'true');
+    const live = container.querySelector('p[aria-busy="true"]');
+    expect(live).not.toBeNull();
+    expect(live?.textContent).toBe('Hello **world**');
     act(() => {
       useStreamStore.getState().done('m1');
     });
@@ -34,7 +36,7 @@ describe('StreamText', () => {
   });
 
   it('sanitises raw HTML in model output', () => {
-    render(<StreamText messageId="m2" content={'<script>alert(1)</script><img src=x onerror=alert(1)> safe'} />);
+    render(<StreamText messageId="m2" content={'Hello <script>alert(1)</script> <b onclick="x">safe</b> <img src=x onerror=alert(1)>'} />);
     expect(document.querySelector('script')).toBeNull();
     expect(document.querySelector('img')).toBeNull();
     expect(screen.getByText(/safe/)).toBeInTheDocument();
