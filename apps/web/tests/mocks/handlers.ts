@@ -204,6 +204,17 @@ export const handlers = [
     return HttpResponse.json(state.session, { status: 201 });
   }),
   http.get(url('/api/sessions/current'), () => guard() ?? HttpResponse.json(state.session)),
+  http.post(url('/api/sessions/:id/top-up'), async ({ params, request }) => {
+    const g = guard();
+    if (g) return g;
+    const body = (await request.json()) as { amount: number };
+    if (!state.session || state.session.channel_id !== String(params.id)) {
+      return HttpResponse.json({ code: 'session_closed', message: 'No open allocation' }, { status: 402 });
+    }
+    state.session.deposit = micro(state.session.deposit + body.amount);
+    state.session.status = 'open';
+    return HttpResponse.json(state.session);
+  }),
 
   http.get(url('/api/jobs/:id'), ({ params }) => {
     const job = pollJob(String(params.id));
