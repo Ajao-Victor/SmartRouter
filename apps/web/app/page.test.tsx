@@ -1,17 +1,27 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import HomePage from './page';
 
-describe('HomePage (Task 1 placeholder)', () => {
-  it('renders the pitch line word by word', () => {
+const push = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: vi.fn() }) }));
+
+describe('HomePage (landing)', () => {
+  it('renders the pitch, task chips, saving proof and coming-soon teasers', () => {
     render(<HomePage />);
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
-      /Tell SmartRouter what you want done/,
-    );
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Tell SmartRouter what you want done/);
+    for (const label of ['Chat', 'Writing', 'Coding', 'Research', 'Translation', 'Image', 'Music']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+    expect(screen.getByText('80% of the best quality at 1/34 of the price')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Naira via Paystack/ })).toBeInTheDocument();
+    expect(screen.getAllByText('Quality data: LMArena, Artificial Analysis').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('labels the free model honestly', () => {
+  it('routes Start a task to /chat and chips to a category', () => {
     render(<HomePage />);
-    expect(screen.getByText(/Free · Llama 3\.1 8B/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Start a task' }));
+    expect(push).toHaveBeenCalledWith('/chat');
+    fireEvent.click(screen.getByRole('button', { name: 'Coding' }));
+    expect(push).toHaveBeenCalledWith('/chat?category=coding');
   });
 });
