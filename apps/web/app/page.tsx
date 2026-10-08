@@ -2,8 +2,8 @@
 
 import { motion } from 'motion/react';
 
-import { fadeUp, floatLoop, revealItem, staggerWords, withReduced } from '@/lib/motion/variants';
 import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';
+import { fadeUp, floatLoop, revealItem, staggerWords, withReduced } from '@/lib/motion/variants';
 
 /**
  * Placeholder home on the shared motion library — replaced by the full landing in Task 10.
@@ -48,8 +48,7 @@ export default function HomePage() {
         className="glass num flex flex-wrap items-center gap-x-4 gap-y-2 rounded-pill px-5 py-3 text-sm text-text-1 shadow-glow-accent"
       >
         <motion.div
-          variants={reduced ? undefined : floatLoop}
-          animate="float"
+          {...(reduced ? {} : { variants: floatLoop, animate: 'float' })}
           className="flex flex-wrap items-center gap-x-4 gap-y-2"
         >
           <span>10 providers</span>
