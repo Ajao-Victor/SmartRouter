@@ -14,6 +14,7 @@ import { toast } from '@/stores/toastStore';
 
 import { AllocationHUD } from '@/components/allocation/AllocationHUD';
 import { TopBar } from '@/components/layout/TopBar';
+import { ReceiptDrawer } from '@/components/receipt/ReceiptDrawer';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { WalletSheet } from '@/components/wallet/WalletSheet';
 
@@ -73,6 +74,7 @@ export function AppShell({ children, title, right }: AppShellProps) {
           onTopUp={notYet('Top up')}
         />
       )}
+      <ReceiptDrawer />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 pt-4 pb-32">
         {me.isPending ? (
           <div className="space-y-3" aria-busy="true">
