@@ -321,7 +321,7 @@ export function withReduced<T extends Variants>(variants: T, reduced: boolean): 
       next[key] = Array.isArray(value) ? value[value.length - 1] : value;
     }
     next.transition = { duration: 0.18 };
-    out[name] = next as T[keyof T];
+    out[name] = next as unknown as Variants[string];
   }
   return out as T;
 }
