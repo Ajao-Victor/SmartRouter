@@ -11,6 +11,7 @@ import { fadeUp, stagger, withReduced } from '@/lib/motion/variants';
 import { useAuth } from '@/hooks/useAuth';
 import { useMe } from '@/hooks/useMe';
 import { useSettings } from '@/hooks/useSettings';
+import { useSpendPermission } from '@/hooks/useSpendPermission';
 import { toast } from '@/stores/toastStore';
 import { useUiStore } from '@/stores/uiStore';
 
@@ -28,6 +29,7 @@ export default function SettingsPage() {
   const me = useMe();
   const settings = useSettings();
   const auth = useAuth();
+  const permission = useSpendPermission();
   const theme = useUiStore((s) => s.theme);
   const setTheme = useUiStore((s) => s.setTheme);
   const forceReduced = useUiStore((s) => s.forceReducedMotion);
@@ -87,12 +89,14 @@ export default function SettingsPage() {
 
       <motion.section variants={withReduced(fadeUp, reduced)}>
         <SpendPermissionCard
-          status="none"
+          status={permission.status}
+          expiresAt={permission.data?.expiresAt ?? null}
+          busy={permission.approve.isPending || permission.revoke.isPending}
           onApprove={() => {
-            toast.info('Spend permission approval arrives in Task 20');
+            permission.approve.mutate();
           }}
           onRevoke={() => {
-            toast.info('Revoke arrives in Task 20');
+            permission.revoke.mutate();
           }}
         />
       </motion.section>
