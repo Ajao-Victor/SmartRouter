@@ -11,18 +11,22 @@ import { api } from '@/lib/api/endpoints';
 import type { SliderPreset } from '@/lib/api/types';
 
 
-import { useChat } from '@/hooks/useChat';
+import { useChat, useChatCache } from '@/hooks/useChat';
+import { useCompareVote } from '@/hooks/useFeedback';
 import { useFreeUsage } from '@/hooks/useFreeUsage';
+import { useJobs } from '@/hooks/useJobs';
 import { useMe } from '@/hooks/useMe';
 import { useModelLabel } from '@/hooks/useModelLabel';
 import { useQuote } from '@/hooks/useQuote';
 import { useRun } from '@/hooks/useRun';
 import { useTopUp } from '@/hooks/useTopUp';
 import { useComposerStore } from '@/stores/composerStore';
+import { useStreamStore } from '@/stores/streamStore';
 import { toast } from '@/stores/toastStore';
 import { useUiStore } from '@/stores/uiStore';
 
 import { TopUpBar } from '@/components/allocation/TopUpBar';
+import { CompareSplit } from '@/components/chat/CompareSplit';
 import { Composer } from '@/components/chat/Composer';
 import { ModelPicker } from '@/components/chat/ModelPicker';
 import { Thread } from '@/components/chat/Thread';
@@ -50,6 +54,19 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
   const topUp = useTopUp();
   const drawTrail = useGlowTrail();
   const setPageTitle = useUiStore((s) => s.setPageTitle);
+  const compareMode = useUiStore((s) => s.compareMode);
+  const setCompareMode = useUiStore((s) => s.setCompareMode);
+  const compareIds = useComposerStore((s) => s.compareModelIds);
+  const setCompareModel = useComposerStore((s) => s.setCompareModel);
+  const clearCompareIds = useComposerStore((s) => s.clearCompare);
+  const compareVote = useCompareVote();
+  const cache = useChatCache(chatId);
+  const streamEntries = useStreamStore((s) => s.byMessageId);
+  const jobs = useJobs(
+    Object.entries(streamEntries)
+      .filter(([, e]) => e.jobId !== null)
+      .map(([messageId, e]) => ({ messageId, jobId: e.jobId ?? '' })),
+  );
 
   const draft = useComposerStore((s) => s.draft);
   const selectedModelId = useComposerStore((s) => s.selectedModelId);
@@ -128,12 +145,70 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
     [draft, chat.data, runner, quoteData, autoFree, freeAvailable, getQuote, quote],
   );
 
+  const startCompare = async () => {
+    const prompt = draft.trim();
+    const [l, r] = compareIds;
+    if (!prompt || !chat.data || !quoteData || !l || !r) {
+      toast.warn('Pick two models to compare');
+      return;
+    }
+    const result = await runner.runCompare({ prompt, quote: quoteData, leftModelId: l, rightModelId: r, seq: chat.data.messages.length });
+    if (result === 'needs_requote') getQuote(prompt);
+    else if (result === 'no_allocation') toast.warn('Open an allocation first');
+    else if (result === 'started') {
+      quote.reset();
+      setLastPrompt(null);
+    }
+  };
+
   const routeAndRun = (modelId: string | null, forceFree = false) => {
+    const hud = document.querySelector<HTMLElement>('[data-hud="allocation"]');
+    if (compareMode && compareIds[0] && compareIds[1] && !forceFree) {
+      drawTrail(runRef.current, [cardRefs.current.get(compareIds[0]) ?? null, cardRefs.current.get(compareIds[1]) ?? null, hud], 'teal');
+      void startCompare();
+      return;
+    }
     const target = modelId ?? quoteData?.recommendations[0]?.model_id ?? null;
     const card = target ? (cardRefs.current.get(target) ?? null) : null;
-    const hud = document.querySelector<HTMLElement>('[data-hud="allocation"]');
     drawTrail(runRef.current, [card, hud], forceFree ? 'free' : 'accent');
     void startRun({ modelId, ...(forceFree ? { forceFree } : {}) });
+  };
+
+  const onCompareToggle = (modelId: string) => {
+    const [l, r] = compareIds;
+    if (l === modelId) setCompareModel(0, null);
+    else if (r === modelId) setCompareModel(1, null);
+    else if (!l) setCompareModel(0, modelId);
+    else if (!r) setCompareModel(1, modelId);
+    else setCompareModel(1, modelId);
+  };
+
+  const pair = runner.compare;
+  const leftMsg = pair ? (chat.data?.messages.find((m) => m.id === pair.leftMessageId) ?? null) : null;
+  const rightMsg = pair ? (chat.data?.messages.find((m) => m.id === pair.rightMessageId) ?? null) : null;
+  const pairDone =
+    pair !== null &&
+    ['done', 'error'].includes(streamEntries[pair.leftMessageId]?.status ?? '') &&
+    ['done', 'error'].includes(streamEntries[pair.rightMessageId]?.status ?? '');
+
+  const onPick = (side: 'left' | 'right') => {
+    if (!pair) return;
+    const winnerId = side === 'left' ? pair.leftMessageId : pair.rightMessageId;
+    const loserId = side === 'left' ? pair.rightMessageId : pair.leftMessageId;
+    const winnerModel = side === 'left' ? pair.leftModelId : pair.rightModelId;
+    const leftReq = streamEntries[pair.leftMessageId]?.result?.requestId;
+    const rightReq = streamEntries[pair.rightMessageId]?.result?.requestId;
+    if (leftReq && rightReq) compareVote.mutate({ chat_id: chatId, left_request_id: leftReq, right_request_id: rightReq, pick: side });
+    selectModel(winnerModel);
+    api.chats.update(chatId, { current_model_id: winnerModel }).catch(() => undefined);
+    window.setTimeout(() => {
+      cache.remove(loserId);
+      useStreamStore.getState().clear(loserId);
+      runner.clearCompare();
+      clearCompareIds();
+      setCompareMode(false);
+      winnerId;
+    }, 700);
   };
 
   if (chat.isPending) {
@@ -152,6 +227,8 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
     <div className="space-y-6">
       <Thread
         messages={chat.data.messages}
+        jobs={jobs}
+        exclude={pair ? [pair.leftMessageId, pair.rightMessageId] : []}
         onRerunFree={(messageId) => {
           const idx = chat.data.messages.findIndex((m) => m.id === messageId);
           const prev = [...chat.data.messages.slice(0, Math.max(0, idx))].reverse().find((m) => m.role === 'user');
@@ -159,6 +236,7 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
           void runner.rerunFree(prev.content, chat.data.messages.length, quoteData, freeAvailable);
         }}
       >
+        {pair && leftMsg && rightMsg && <CompareSplit left={leftMsg} right={rightMsg} canPick={pairDone} onPick={onPick} />}
         <AnimatePresence>
           {runner.needsTopUp && me.data && (
             <TopUpBar
@@ -211,6 +289,9 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
           selectModel(modelId);
           if (lastPrompt) getQuote(lastPrompt, modelId);
         }}
+        compareMode={compareMode}
+        compareIds={compareIds}
+        onCompareToggle={onCompareToggle}
         cardRef={(modelId, el) => {
           if (el) cardRefs.current.set(modelId, el);
           else cardRefs.current.delete(modelId);
