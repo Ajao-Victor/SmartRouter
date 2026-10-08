@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { AdditiveBlending, BufferGeometry, Color, Float32BufferAttribute, Line, LineDashedMaterial, Vector3, type Points, type ShaderMaterial } from 'three';
+import { AdditiveBlending, BufferGeometry, Color, Line, LineDashedMaterial, Vector3, type BufferAttribute, type Points, type ShaderMaterial } from 'three';
 
 import { MAX_DPR } from '@/lib/motion/capabilities';
 
@@ -56,8 +56,11 @@ function FieldPoints({ count, activity }: FieldProps) {
     const m = material.current;
     if (!m) return;
     const u = m.uniforms;
-    if (u.uTime) u.uTime.value += delta;
-    if (u.uActivity) u.uActivity.value += (activity - (u.uActivity.value as number)) * Math.min(1, delta * 3);
+    if (u.uTime) u.uTime.value = (u.uTime.value as number) + delta;
+    if (u.uActivity) {
+      const cur = u.uActivity.value as number;
+      u.uActivity.value = cur + (activity - cur) * Math.min(1, delta * 3);
+    }
     if (u.uMouse) {
       const target: [number, number] = [mouse.x * viewport.width * 0.5, mouse.y * viewport.height * 0.5];
       const cur = u.uMouse.value as [number, number];
@@ -86,9 +89,15 @@ function FieldPoints({ count, activity }: FieldProps) {
   );
 }
 
+interface Lane {
+  line: Line;
+  base: Float32Array;
+}
+
 function Lanes({ activity }: { activity: number }) {
-  const lines = useMemo(() => {
-    const out: Line[] = [];
+  const offset = useRef(0);
+  const lanes = useMemo(() => {
+    const out: Lane[] = [];
     for (let i = 0; i < 6; i += 1) {
       const pts: Vector3[] = [];
       const y = -6 + i * 2.4;
@@ -109,33 +118,38 @@ function Lanes({ activity }: { activity: number }) {
       line.computeLineDistances();
       line.rotation.x = -0.55;
       line.position.y = -2.5;
-      out.push(line);
+      const attr = geo.getAttribute('lineDistance') as BufferAttribute;
+      out.push({ line, base: Float32Array.from(attr.array as ArrayLike<number>) });
     }
     return out;
   }, []);
 
+  // Dashes travel along the lane by shifting the lineDistance attribute (portable across three versions).
   useFrame((_, delta) => {
-    for (const l of lines) {
-      const m = l.material as LineDashedMaterial;
-      m.dashOffset -= delta * (0.6 + activity * 2.4);
-      m.opacity = 0.18 + activity * 0.35;
+    offset.current += delta * (0.6 + activity * 2.4);
+    for (const { line, base } of lanes) {
+      const attr = line.geometry.getAttribute('lineDistance') as BufferAttribute;
+      const arr = attr.array as Float32Array;
+      for (let i = 0; i < base.length; i += 1) arr[i] = (base[i] ?? 0) + offset.current;
+      attr.needsUpdate = true;
+      (line.material as LineDashedMaterial).opacity = 0.18 + activity * 0.35;
     }
   });
 
   useEffect(
     () => () => {
-      for (const l of lines) {
-        l.geometry.dispose();
-        (l.material as LineDashedMaterial).dispose();
+      for (const { line } of lanes) {
+        line.geometry.dispose();
+        (line.material as LineDashedMaterial).dispose();
       }
     },
-    [lines],
+    [lanes],
   );
 
   return (
     <>
-      {lines.map((l, i) => (
-        <primitive key={String(i)} object={l} />
+      {lanes.map(({ line }, i) => (
+        <primitive key={String(i)} object={line} />
       ))}
     </>
   );
