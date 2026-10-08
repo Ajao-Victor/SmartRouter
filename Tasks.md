@@ -318,7 +318,7 @@
 - Copy audit against `UI_UX_Brief.md` §8 (verbatim strings); "available via MPP" and attribution present wherever recommendations appear.
 **Acceptance:** axe has no serious violations on landing, chat, wallet, settings.
 
-### Task 28 — E2E demo path and video rehearsal  `todo`
+### Task 28 — E2E demo path and video rehearsal  `done` (2026-10-08; commits: 4c5d74b 6626122 6704b48 f3da8e3 48c9d8f af044fb 5e30296 aafb59c 74e3f66 f6abad1 e6acdfa c16a952 5850caa 0a3c30a)
 - `tests/e2e/demo.spec.ts` (mock API): deposit → allocation → task → recommendation → result → top-up → receipt.
 - `docs/demo-script.md` with the 3-minute choreography from `design.md` §7 and timing.
 **Acceptance:** e2e passes on mobile + desktop projects; a screen recording of the mock path exists.
