@@ -40,12 +40,14 @@
 |---|---|
 | Docs suite (12 files) | ✅ generated Oct 8, 2026 |
 | Phase 0 Alignment | ⬜ |
-| Phase 1 Setup | 🟡 Tasks 1–4 done (Oct 8, 2026); Tasks 5–8 next |
+| Phase 1 Setup | 🟡 Tasks 1–5 done (Oct 8, 2026); Tasks 6–8 next |
 | Phase 2 Core UI | ⬜ |
 | Phase 3 Integration | ⬜ |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 5 (2026-10-08) — state management.** Six Zustand slices in `stores/`: `uiStore` (dialog stack, wallet sheet, compare mode, `theme`, `forceReducedMotion`, `sdkDialogOpen`, `hydrated`; persists only theme + reduced-motion to IndexedDB via `persist` + `skipHydration`), `composerStore` (draft, attachments with MIME allowlist / 10 MB placeholder / max 4, category, slider override, selected model, compare slots), `allocationStore` (mirrors `user_sessions`: deposit, remaining = deposit − highest_voucher, status none/open/used/toppingUp/closed, `applyVoucher`/`restoreVoucher`/top-up cycle; selectors `remainingPct`, `isLow` < 25%, `isUsed`, `canAfford`), `signerStore` (public key, channel, cumulative total, deposit cap; `advance()` throws `VoucherCapError` above the deposit; `rollback()`; no key material), `streamStore` (per-message token buffers, status idle/streaming/done/error/retrying, heartbeat, retry, file, job; `selectActivity` 0..1 for the orb/field), `walletStore` (SDK status idle→initialising→connecting→signing→connected/error, address, `sessionReady`; balances deliberately excluded). `stores/index.ts` exports `resetAllStores()` for logout. `lib/idb.ts`: fail-safe IndexedDB KV + Zustand async storage adapter. `components/layout/PreferencesProvider.tsx`: rehydrates `uiStore` after mount, flips `hydrated`, applies `data-theme` to `<html>`, feeds `forceReducedMotion` into `ReducedMotionProvider`. Verified: lint, typecheck, 59 tests (11 files), build.
 
 - **Task 4 (2026-10-08) — motion architecture.** `lib/motion/springs.ts`: seven springs — snappy (500/32/0.6), soft (170/26), liquid (90/18/1.2), magnet (300/20), bouncy (420/14/0.8), glide (120/30), heavy (60/20/1.6) — as both `Transition` objects and `useSpring` option sets; tween-only exits (`fast` 0.18 s, `base` 0.25 s); `instant`; `dragPhysics` (elastic 0.12, dismiss at 500 px/s or 40% travel). `lib/motion/variants.ts`: entrances (`fadeIn`, `fadeUp` with blur lift, `fadeScale`, `blurIn`, `revealItem`), `stagger()` factory with reversed exits + `staggerWords`, surfaces (`holoCard` rest/hover/selected/tap + teal/free twins, `dock` idle/focused/cooldown-shake, `hud` ok/low-pulse/used/toppingUp-spin), messages (`bubble` hidden/streaming/done/error-shake/retrying-pulse, `tokenBatch`), sheets (`slideUpSheet` liquid, `slideRightDrawer` heavy, `dialog`, `backdrop`, `toast` bouncy), micro-interactions (`chip`, `pop`, `tick`, `lock`, `shake`), reveals (`circleReveal`, `wipeLeft/Right`, `collapseLoser`, `meetFromLeft/Right`), loops (`floatLoop`, `pulseLoop`), `reorderLayout` (layout + glide), and `withReduced()` which strips transforms/filters/clip-paths/springs, collapses keyframes, kills infinite loops and keeps opacity on 0.18 s fades; `pick()` for whole-set swaps. `components/layout/ReducedMotionProvider.tsx`: context + `MotionConfig` combining OS preference, Save-Data (read after mount, no hydration mismatch) and an app `forceReduced` prop (uiStore hookup in Task 5). `useReducedMotionSafe`, `capabilities.ts` (`canUseWebGL` = webgl2 ∧ cores ≥ 4 ∧ ¬reduced ∧ ¬saveData, memoised; `MAX_DPR` 1.5), `useTilt` (±8° on magnet springs + spotlight position), `useMagnetic` (8 px pull). Root layout wrapped in the provider; placeholder home now uses `staggerWords`/`revealItem`/`fadeUp`/`floatLoop` through `withReduced`. Verified: lint, typecheck, 37 tests (6 files), build (home 144 kB first-load JS).
 
@@ -59,6 +61,10 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | Preferences persist to IndexedDB through Zustand `persist` with `skipHydration: true`; `PreferencesProvider` calls `rehydrate()` after mount | `localStorage` is banned by rules/lint; server and first paint render defaults so there is no hydration mismatch |
+| 2026-10-08 | Wallet balances are never in a store; only SDK connection status is (`walletStore`) | PDF: balances are read live from Tempo, never stored |
+| 2026-10-08 | `signerStore.advance()` reserves before signing and throws at the deposit cap; `rollback()` only for runs with no result | Cumulative voucher safety (security.md §3) |
+| 2026-10-08 | `uiStore.reset()` keeps theme/reduced-motion across logout | Preferences belong to the device, not the session |
 | 2026-10-08 | Springs for every state change; tweens only for exits | Physics feel per design mandate; spring tails on unmount would linger |
 | 2026-10-08 | HUD colour via `data-state` CSS, not CSS-variable keys inside variants (deviation from design.md's `--ring` sketch) | Framer can't reliably interpolate `var()` inside box-shadow strings; CSS handles colour, Framer handles scale/rotate |
 | 2026-10-08 | Reduced motion = opacity-only fades via `withReduced()`, never "no animation"; `MotionConfig reducedMotion="user"` as a second guard | Accessibility without a dead UI; OS pref still strips transforms Framer-side |
@@ -91,6 +97,10 @@
 
 ## Assumptions currently in code
 
+- `composerStore.MAX_UPLOAD_BYTES` = 10 MB and the MIME allowlist (png, jpeg, webp, text/plain, pdf) are placeholders pending Backend_Gaps_Report §7.
+- `allocationStore` derives remaining = `deposit − highest_voucher` (PDF fields); `counted`/`settled` are not used client-side yet.
+- IndexedDB persistence is untested in Vitest (jsdom has no IndexedDB; the adapter no-ops). Manual browser check needed once Settings exposes the toggles (Task 16).
+
 - `ReducedMotionProvider` ignores Save-Data on the server and first paint (reads it in an effect) to avoid hydration mismatch; a one-frame full-motion flash is possible on Save-Data devices.
 
 - `lib/api/client.ts` status→code map (Gaps §2.5 unconfirmed): 401 unauthorized · 402 allocation_exceeded · 404 not_found · 409 quote_expired · 400/422 validation · 429 rate_limited (+`Retry-After`) · 5xx server. A `code` field in the API error body overrides the mapping.
@@ -105,6 +115,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08 (session 6)** — Executed **Task 5** (six stores, IndexedDB helper, PreferencesProvider, 22 new tests). No new packages. Next: "execute task 6" (UI primitives).
 
 - **2026-10-08 (session 5)** — Executed **Task 4** (springs, variants, reduced-motion provider/hook, WebGL gate, tilt/magnetic hooks, 14 new tests). jsdom canvas stubbed in test setup. No new packages. Next: "execute task 5" (Zustand stores; wire `uiStore.forceReducedMotion` into the provider).
 
