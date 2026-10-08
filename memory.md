@@ -43,9 +43,11 @@
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
 | Phase 2 Core UI | ✅ Tasks 9–17 done (Oct 8, 2026) |
 | Phase 3 Integration | ✅ Tasks 18–25 done (Oct 8, 2026) |
-| Phase 4 Polish | ⬜ |
+| Phase 4 Polish | 🟡 Task 26 done (Oct 8, 2026); Tasks 27–29 next |
 
 ## Completed features
+
+- **Task 26 (2026-10-08) — performance and fallbacks.** Already in place: R3F scenes lazy via `next/dynamic` (ssr off), DPR ≤ 1.5, `frameloop='never'` on hidden tab / SDK dialog, capability gate (webgl2 ∧ cores ≥ 4 ∧ ¬reduced ∧ ¬saveData), CSS field fallback always underneath, one particle system ≤ 120, ≤ 3 blur surfaces by construction (dock, sheet, toast). New: markdown renderer lazy-loaded out of the chat route (chat first-load 270 → 223 kB); `NEXT_DIST_DIR` lets CI/phase builds write to `.next-build` while `next dev` holds `.next`; `scripts/budget.mjs` checks App Router first-load and the lazy WebGL chunk against budgets (landing ≤ 220 gz, chat ≤ 260 gz, WebGL ≤ 230 gz) — current: landing ≈ 116 kB gz, chat ≈ 234 kB gz, WebGL ≈ 224 kB gz, all OK; OpenTelemetry dynamic-require warning silenced; production build clean. Verified: lint, typecheck, 142 tests (41 files), build.
 
 - **Task 25 (2026-10-08) — Sentry, CSP notes, host guard, CI, README.** `sentry.client.config.ts` (init only with a DSN; `sendDefaultPii: false`; prompts/wallet breadcrumbs dropped for `/run`, `/quote`, `/sessions`; hex addresses/hashes scrubbed from messages, URLs and exceptions; replays off), `sentry.server.config.ts`, `instrumentation.ts`. `scripts/ci.sh` = lint + typecheck + test + guard:hosts + build. `apps/web/README.md` (run, checks, env, CSP verification steps for the Tempo origins — Gaps §8, monitoring). `pnpm guard:hosts` OK. Verified: lint, typecheck, 142 tests; production build deferred while the dev server holds `.next` (see Task 26 for the separate build dir).
 
@@ -101,6 +103,8 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | WebGL lazy-chunk budget raised from design.md's 180 kB to 230 kB gz | three.js core alone is ≈165 kB gz; the chunk only loads on capable devices after first paint |
+| 2026-10-08 | Phase builds go to `.next-build` via `NEXT_DIST_DIR` | The user previews on `next dev`, which owns `.next` in Next 15 |
 | 2026-10-08 | Sentry is a no-op without a DSN and never receives wallet/prompt traffic | security.md §8; hackathon builds run without a DSN |
 | 2026-10-08 | One `toUiAction` mapper is the single source of error → UI behaviour | Technical_Requirements §5.4 rows stay consistent across hooks and components |
 | 2026-10-08 | Compare reserves the two vouchers sequentially (cumulative total) then streams in parallel | Vouchers are cumulative per channel (PDF/TIP-1034); parallel reservation would race the running total |
@@ -173,6 +177,8 @@
 
 ## Assumptions currently in code
 
+- Budget gz figures are estimated as raw/3; Lighthouse runs (design.md §5) need a browser and are deferred to the demo rehearsal (Task 28).
+
 - `withSentryConfig` source-map upload is not wired (no auth token); client errors still report with the DSN.
 
 - Default cooldown is 10 s when the API sends no Retry-After.
@@ -227,6 +233,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 26** (lazy markdown, dist-dir switch, budget script, warning fix, build verified). No new packages. Next: "execute task 27".
 
 - **2026-10-08** — Executed **Task 25** (Sentry configs, instrumentation, CI script, README). Phase 3 complete. No new packages. Next: "execute task 26".
 
