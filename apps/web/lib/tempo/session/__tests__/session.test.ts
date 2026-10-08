@@ -28,7 +28,7 @@ describe('voucherSigner', () => {
 
 describe('MockSessionClient', () => {
   it('opens, tops up and signs cumulative vouchers', async () => {
-    const client = new MockSessionClient(0);
+    const client = new MockSessionClient();
     const { channelId } = await client.openChannel({ maxDepositMicro: micro(2_000_000), authorizedSigner: '0x04' });
     expect(channelId).toMatch(/^ch_mock_/);
     const v = await client.signVoucher({ channelId, cumulativeMicro: micro(900) });
