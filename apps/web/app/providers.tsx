@@ -9,6 +9,7 @@ import { isApiError } from '@/lib/api/client';
 import { GlowTrailLayer } from '@/components/fx/GlowTrail';
 import { ParticleLayer } from '@/components/fx/ParticleBurst';
 import { RouterField } from '@/components/fx/RouterField';
+import { LiveRegion } from '@/components/layout/LiveRegion';
 import { MockProvider } from '@/components/layout/MockProvider';
 import { PreferencesProvider } from '@/components/layout/PreferencesProvider';
 import { Toaster } from '@/components/ui/Toast';
@@ -44,6 +45,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <MockProvider>{children}</MockProvider>
         </div>
         <WaitlistDialog />
+        <LiveRegion />
         <GlowTrailLayer />
         <ParticleLayer />
         <Toaster />
