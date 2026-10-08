@@ -13,13 +13,20 @@ test.describe('demo path', () => {
     await page.getByRole('button', { name: 'Sign in with passkey' }).click();
     await page.waitForURL('**/chat');
 
-    // Wallet: deposit (mock adds $2 USDC.e) and open the allocation
+    // Wallet: deposit (mock adds $2 USDC.e)
     await page.getByRole('button', { name: 'Wallet' }).click();
     const sheet = page.getByRole('dialog');
     await expect(sheet).toContainText('USDC.e');
     await sheet.getByRole('button', { name: 'Deposit' }).click();
     await expect(sheet).toContainText('$14.50');
+
+    // Allocation: one scoped spend permission (mock approval dialog) → session channel → $2 ring
+    await sheet.getByRole('button', { name: /Open allocation · \$2/ }).click();
+    await expect(page.getByText('Allocation open')).toBeVisible({ timeout: 15_000 });
+    await expect(sheet.getByRole('button', { name: /Top up \$2/ })).toBeVisible();
     await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Allocation: $2.00 remaining of $2.00' })).toBeVisible();
 
     // Task: describe it → classified and quoted as the first prompt
     await page.getByLabel('Or describe the task').fill('Write a short cover letter for a payments engineer role at Paystack');
