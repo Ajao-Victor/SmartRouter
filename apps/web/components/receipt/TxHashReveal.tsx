@@ -28,7 +28,7 @@ export function TxHashReveal({ hash }: { hash: string }) {
       const p = Math.min(1, (now - start) / DURATION);
       const settled = Math.floor(p * hash.length);
       let out = hash.slice(0, settled);
-      for (let i = settled; i < hash.length; i += 1) out += i < 2 ? hash[i] : HEX[Math.floor(Math.random() * 16)];
+      for (let i = settled; i < hash.length; i += 1) out += i < 2 ? (hash[i] ?? '') : (HEX[Math.floor(Math.random() * 16)] ?? '0');
       setShown(out);
       if (p < 1) raf = requestAnimationFrame(tick);
     };
