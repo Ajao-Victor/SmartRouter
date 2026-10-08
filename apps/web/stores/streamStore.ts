@@ -114,11 +114,11 @@ export const useStreamStore = create<StreamState & StreamActions>()((set) => ({
     set((s) => patch(s, messageId, () => ({ status: 'error', error })));
   },
   clear: (messageId) => {
-    set((s) => {
-      const { [messageId]: _removed, ...rest } = s.byMessageId;
-      void _removed;
-      return { byMessageId: rest };
-    });
+    set((s) => ({
+      byMessageId: Object.fromEntries(
+        Object.entries(s.byMessageId).filter(([id]) => id !== messageId),
+      ),
+    }));
   },
   clearAll: () => {
     set({ byMessageId: {} });
