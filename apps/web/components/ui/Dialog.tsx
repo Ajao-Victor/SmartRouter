@@ -2,7 +2,7 @@
 
 import { useId } from 'react';
 
-import clsx from 'clsx';
+import { clsx } from 'clsx';
 
 import { dialog as dialogVariants } from '@/lib/motion/variants';
 
