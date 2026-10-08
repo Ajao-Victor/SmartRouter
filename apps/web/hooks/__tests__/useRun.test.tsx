@@ -135,3 +135,32 @@ describe('useRun', () => {
     expect(entry?.error?.canRerunFree).toBe(true);
   });
 });
+
+describe('useRun compare', () => {
+  it('runs two models in parallel with two vouchers and one user message', async () => {
+    useAllocationStore.getState().hydrateFromSession(session(2_000_000));
+    useSignerStore.getState().setSigner({ publicKey: 'pk', channelId: 'ch', depositMicro: micro(2_000_000) });
+    const compareQuote: QuoteResponse = {
+      ...quote,
+      recommendations: [
+        ...quote.recommendations,
+        { model_id: 'opus', label: 'Opus', provider: 'Anthropic', price: micro(28_600), speed_label: 'steady', reason: '', score: 0.7, quality: 1, is_free: false, is_best_quality: true, searches_web: false, quote_id: 'q2' },
+      ],
+    };
+    start.mockImplementation(() => Promise.resolve(okStream()));
+    const { result } = renderHook(() => useRun('c'), { wrapper });
+    let outcome = '';
+    await act(async () => {
+      outcome = await result.current.runCompare({ prompt: 'Write', quote: compareQuote, leftModelId: 'glm', rightModelId: 'opus', seq: 0 });
+    });
+    expect(outcome).toBe('started');
+    expect(start).toHaveBeenCalledTimes(2);
+    const bodies = start.mock.calls.map((c) => c[0] as { model_id: string; voucher?: { cumulative_amount: number } });
+    expect(bodies.map((b) => b.model_id).sort()).toEqual(['glm', 'opus']);
+    expect(bodies.map((b) => b.voucher?.cumulative_amount).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([900, 29_500]);
+    expect(useSignerStore.getState().cumulativeMicro).toBe(29_500);
+    const chat = qc.getQueryData<ChatWithMessages>(queryKeys.chat('c'));
+    expect(chat?.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'assistant']);
+    expect(result.current.compare?.leftModelId).toBe('glm');
+  });
+});
