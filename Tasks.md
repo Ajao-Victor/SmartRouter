@@ -179,7 +179,7 @@
 **Animations:** card `holoCard` rest/hover/selected; `layout` reorder on slider; new #1 border flash (`boxShadow` keyframes 400 ms); bars grow; reason types.
 **Acceptance:** tests pass; horizontal scroll-snap on `sm`; 2×2 on `md`; row on `lg`.
 
-### Task 14 — Thread, MessageBubble, StreamText, Media/Job cards  `todo`
+### Task 14 — Thread, MessageBubble, StreamText, Media/Job cards  `done` (2026-10-08; commits: 37e05f8 2f50795 37e8c79 8f1c0c8 6c372fa a259f18 5d9daa5 210e723 0776175 39ff14a e4ca44e 54ab2f4 7ad8ff6 dc9ca61 bbd4583 ea96acb)
 **Files**
 - `hooks/useChat.ts` — `['chat', id]` query; helpers to append optimistic user/assistant messages.
 - `components/chat/Thread.tsx` — virtualised-lite list (simple windowing by index for > 60 messages); auto-scroll to bottom while streaming unless the user scrolled up (show "Jump to latest" pill).
