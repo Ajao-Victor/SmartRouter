@@ -193,7 +193,6 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
 
   const onPick = (side: 'left' | 'right') => {
     if (!pair) return;
-    const winnerId = side === 'left' ? pair.leftMessageId : pair.rightMessageId;
     const loserId = side === 'left' ? pair.rightMessageId : pair.leftMessageId;
     const winnerModel = side === 'left' ? pair.leftModelId : pair.rightModelId;
     const leftReq = streamEntries[pair.leftMessageId]?.result?.requestId;
@@ -207,7 +206,6 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
       runner.clearCompare();
       clearCompareIds();
       setCompareMode(false);
-      winnerId;
     }, 700);
   };
 
