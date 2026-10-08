@@ -6,6 +6,8 @@ import { ensureSpendPermission, getSpendPermission, revokeSpendPermission } from
 
 import { toast } from '@/stores/toastStore';
 
+import type { SpendPermissionStatus } from '@/components/wallet/SpendPermissionCard';
+
 const KEY = ['tempo', 'spendPermission'] as const;
 
 /** Current scoped spend permission (from the SDK) + approve / revoke mutations. */
@@ -32,6 +34,7 @@ export function useSpendPermission(enabled = true) {
     },
   });
 
-  const status = query.data ? 'granted' : 'none';
-  return { ...query, status: status, approve, revoke };
+  // Named to avoid colliding with react-query's own `status` field.
+  const permissionStatus: SpendPermissionStatus = query.data ? 'granted' : 'none';
+  return { ...query, permissionStatus, approve, revoke };
 }
