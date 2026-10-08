@@ -132,7 +132,7 @@
 - Add `msw` devDependency; record in `memory.md`.
 **Acceptance:** with `NEXT_PUBLIC_MOCK=1`, the app runs fully offline.
 
-### Task 10 — Landing page  `todo`
+### Task 10 — Landing page  `done` (2026-10-08; commits: a89ac8d 5b69e78 3e6fd7c 44eb2bc 52799d5 ea17205 1a9192f af7bf92 a100056)
 **Files**
 - `components/landing/Hero.tsx` — pitch line (verbatim), word-by-word `stagger(0.04)` + `fadeUp`; `RouterOrb` size 220 floating (`y: [0,-10,0]` 6 s loop); CTA pair: **Start a task** (MagneticButton primary → `/chat`), **Sign in with passkey** (secondary → Task 18 action; before that, toast "Sign-in arrives in Task 18").
 - `components/landing/SavingProof.tsx` — two HoloCards ("GLM 5.3 Flash · $0.0008" / "Claude Opus 5.5 · $0.026", "Writing task · live prices Oct 7") with `NumberTicker` on viewport entry (`whileInView`), `GlowTrail` from cheap card to the saving sentence; line: "80% of the best quality at 1/34 of the price"; `Attribution` beneath.
