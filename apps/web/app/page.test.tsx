@@ -1,13 +1,23 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import HomePage from './page';
+
+function renderHome() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <HomePage />
+    </QueryClientProvider>,
+  );
+}
 
 const push = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: vi.fn() }) }));
 
 describe('HomePage (landing)', () => {
   it('renders the pitch, task chips, saving proof and coming-soon teasers', () => {
-    render(<HomePage />);
+    renderHome();
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Tell SmartRouter what you want done/);
     for (const label of ['Chat', 'Writing', 'Coding', 'Research', 'Translation', 'Image', 'Music']) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
@@ -18,7 +28,7 @@ describe('HomePage (landing)', () => {
   });
 
   it('routes Start a task to /chat and chips to a category', () => {
-    render(<HomePage />);
+    renderHome();
     fireEvent.click(screen.getByRole('button', { name: 'Start a task' }));
     expect(push).toHaveBeenCalledWith('/chat');
     fireEvent.click(screen.getByRole('button', { name: 'Coding' }));
