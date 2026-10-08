@@ -313,7 +313,7 @@
 - Lazy-load R3F chunks; verify budgets in `design.md` §5 with `next build` analyser; DPR cap; `frameloop="never"` on hidden tab and SDK dialogs; blur surface count ≤ 3; test on throttled mobile profile; low-end gate falls back to CSS; `saveData` honoured.
 **Acceptance:** Lighthouse mobile ≥ 80 landing, ≥ 70 chat; no jank during streaming.
 
-### Task 27 — Accessibility and copy pass  `todo`
+### Task 27 — Accessibility and copy pass  `done` (2026-10-08; commits: 000de6d cf3c958 1ca41e8 b0b00d0 4761a55 cb2c307 aab2f62 9af893b 49d6f9a 4c5d74b 6626122)
 - Focus traps, `aria-live` for streaming/done/allocation used, contrast on glass ≥ 4.5:1, 44px targets, keyboard slider, Esc everywhere.
 - Copy audit against `UI_UX_Brief.md` §8 (verbatim strings); "available via MPP" and attribution present wherever recommendations appear.
 **Acceptance:** axe has no serious violations on landing, chat, wallet, settings.
