@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from 'next';
 
 import { fontVariables } from '@/lib/fonts';
 
+import { ReducedMotionProvider } from '@/components/layout/ReducedMotionProvider';
+
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -25,7 +27,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <div className="bg-field-fallback pointer-events-none fixed inset-0 z-field" aria-hidden="true" />
         <div className="bg-grid-field pointer-events-none fixed inset-0 z-field" aria-hidden="true" />
         <div className="bg-noise pointer-events-none fixed inset-0 z-field" aria-hidden="true" />
-        <div className="relative z-content">{children}</div>
+        <ReducedMotionProvider>
+          <div className="relative z-content">{children}</div>
+        </ReducedMotionProvider>
       </body>
     </html>
   );
