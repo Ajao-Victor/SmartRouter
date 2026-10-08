@@ -42,10 +42,12 @@
 | Phase 0 Alignment | ⬜ |
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
 | Phase 2 Core UI | ✅ Tasks 9–17 done (Oct 8, 2026) |
-| Phase 3 Integration | 🟡 Tasks 18–23 done (Oct 8, 2026); Tasks 24–25 next |
+| Phase 3 Integration | 🟡 Tasks 18–24 done (Oct 8, 2026); Task 25 next |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 24 (2026-10-08) — receipts, free usage, error semantics.** Receipts: `ReceiptDrawer` + `useReceipt` already show the session id immediately and decode the tx hash after settlement via `TxHashReveal` with validated explorer links (`lib/explorer.ts`). Free usage: `FreeQuotaMeter` in the workspace from `useFreeUsage`; the Free ModelCard is disabled at 30/30 with the reason; `TopUpBar` disables Continue free at the cap. Error semantics: `lib/api/errors.ts` maps every `ApiError` code to one UI action (sign_in, top_up, requote, cooldown with Retry-After, free_exhausted, open_allocation, offline, toast) with PDF copy; quotes use it (cooldown → dock shake, 401 → landing); `useRun` already handles allocation exceeded → TopUpBar, quote expired → re-quote, 429 → cooldown, session closed → "Open allocation". Verified: lint, typecheck, 142 tests (41 files).
 
 - **Task 23 (2026-10-08) — async jobs, images, Compare execution, feedback.** `hooks/useJobs` (polls `GET /api/jobs/:id` every 3 s per live job until done/failed; keyed by message id). `useRun` refactored around `executeStream` (one assistant message: stream → record / failure rules) with `runCompare` (one user message, two assistant messages, two cumulative vouchers reserved in sequence, two parallel streams, `compare` pair state). Workspace: compare toggles fill two slots from the ModelCards; Run in compare mode draws a teal trail through both cards and runs both; `CompareSplit` renders the pair side by side (Thread excludes them) with "Pick this one" once both finish → `POST /api/compare-votes`, `PATCH current_model_id`, loser removed from the cache, compare mode cleared. `event: file` → MediaCard; `event: job` → JobCard polled via useJobs → MediaCard (audio inferred from result refs in history). Music category hidden when `NEXT_PUBLIC_FLAG_MUSIC=0`; Compare chip already behind `NEXT_PUBLIC_FLAG_COMPARE`. Thumbs feedback from Task 14. Verified: lint, typecheck, 140 tests (40 files).
 
@@ -97,6 +99,7 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | One `toUiAction` mapper is the single source of error → UI behaviour | Technical_Requirements §5.4 rows stay consistent across hooks and components |
 | 2026-10-08 | Compare reserves the two vouchers sequentially (cumulative total) then streams in parallel | Vouchers are cumulative per channel (PDF/TIP-1034); parallel reservation would race the running total |
 | 2026-10-08 | The losing compare reply is removed from the local cache after the collapse animation | The thread shows one chosen answer; the server keeps both requests and the vote |
 | 2026-10-08 | `/run` carries the prompt (and optional attachments) instead of a separate message-create call | PDF step 10: the server saves user + assistant messages at run time; one request, one voucher |
@@ -167,6 +170,8 @@
 
 ## Assumptions currently in code
 
+- Default cooldown is 10 s when the API sends no Retry-After.
+
 - Compare vote body `{chat_id, left_request_id, right_request_id, pick}` is proposed (Gaps §1).
 - Audio results in history are detected by file extension on `result_ref`; the API may expose a mime field later.
 
@@ -217,6 +222,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 24** (errors helper + test, free cap wiring, quota meter, quote error mapping). No new packages. Next: "execute task 25".
 
 - **2026-10-08** — Executed **Task 23** (useJobs, useRun refactor + runCompare, workspace compare/jobs wiring, flags, 2 tests). No new packages. Next: "execute task 24".
 
