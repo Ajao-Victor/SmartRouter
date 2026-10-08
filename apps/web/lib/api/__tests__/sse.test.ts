@@ -56,7 +56,7 @@ describe('runStream', () => {
     const out = await runStream(body, h);
     expect(out.kind).toBe('done');
     expect(h.onMeta).toHaveBeenCalledWith(expect.objectContaining({ request_id: 'r1' }));
-    expect(h.onToken.mock.calls.map((c) => c[0])).toEqual(['Hel', 'lo']);
+    expect((h.onToken.mock.calls as [string][]).map((c) => c[0])).toEqual(['Hel', 'lo']);
     expect(h.onHeartbeat).toHaveBeenCalledTimes(1);
     expect(h.onRetry).toHaveBeenCalledWith(expect.objectContaining({ to_model_id: 'm2' }));
     expect(h.onFile).toHaveBeenCalledWith({ url: 'https://x.y/a.png', mime: 'image/png' });
