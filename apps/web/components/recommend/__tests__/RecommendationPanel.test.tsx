@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 import type { QuoteResponse } from '@/lib/api/types';
 import { micro } from '@/lib/money';
@@ -35,8 +35,8 @@ describe('RecommendationPanel', () => {
     expect(screen.getAllByRole('option')).toHaveLength(4);
     expect(screen.getByRole('option', { name: 'Free · Llama 3.1 8B' })).toBeInTheDocument();
     expect(screen.getByText('Quality data: LMArena, Artificial Analysis')).toBeInTheDocument();
-    expect(screen.getByText('Best quality')).toBeInTheDocument();
-    expect(screen.getByText('Top pick')).toBeInTheDocument();
+    expect(within(screen.getByRole('option', { name: 'Claude Opus 5.5' })).getByText('Best quality')).toBeInTheDocument();
+    expect(within(screen.getByRole('option', { name: 'GLM 5.3 Flash' })).getByText('Top pick')).toBeInTheDocument();
   });
 
   it('picks a model, runs Auto and applies a suggestion', () => {
