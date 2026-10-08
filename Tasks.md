@@ -78,7 +78,7 @@
 **Animations:** none.
 **Acceptance:** tests pass; `reset()` on all stores works from a `resetAllStores()` helper in `stores/index.ts`.
 
-### Task 6 — UI primitives  `todo`
+### Task 6 — UI primitives  `done` (2026-10-08; commits: 64161e7 64832e2 751531b f70e739 deb227d 8a96240 cf7cfe0 210841d 38ae219 986bde0 0883397 3ec0338 d143731 22687a6 4344ab1 9942d95 595b381 a5c5e59 b0bfcc6 47d10d2 915717c ae63f19 b61f2ed 35fb61a 186c28e 9d45c85 ace5686 f2dc968 49bb331)
 **Files** (each ≤ 150 lines; cva variants; forwardRef; a11y)
 - `components/ui/Button.tsx` — variants `primary` (router beam gradient), `secondary` (glass), `ghost`, `danger`, `free` (green); sizes `sm|md|lg`; `loading` prop; `asChild` optional. Framer: `whileTap={{scale:0.97}}` via `motion.button`.
 - `components/ui/MagneticButton.tsx` — wraps Button; pointer-tracked `x/y` `useSpring(springs.magnet)`, max offset 8px, resets on leave; disabled under reduced motion.
@@ -96,7 +96,7 @@
 
 ### Task 7 — FX components (the futuristic layer)  `todo`
 **Files**
-- `components/fx/NumberTicker.tsx` — `useSpring` on value; `useTransform` → `formatUsd`; `aria-live="polite"`; instant under reduced motion.
+- `components/fx/NumberTicker.tsx` — **done in Task 6** (needed by PriceTag): `useSpring` on value; `useTransform` → formatter; `tick` lift on change; `aria-live="polite"`; instant under reduced motion.
 - `components/fx/GlitchText.tsx` — 3 layered spans with `clip-path` slices + hue shift, 600 ms, runs once on mount/change of `text`; fallback plain text.
 - `components/fx/HoloCard.tsx` — `motion.div` with `holoCard` variants; pointer tilt via `useMotionValue` (`rotateX/Y` ±8°, `perspective 900`); rotating conic border using `--angle`; props `tone`, `selected`, `dashed` (coming-soon).
 - `components/fx/LiquidRing.tsx` — SVG ring (r=28) + liquid fill rect clipped to circle, `feTurbulence`+`feDisplacementMap` wobble animated with `animate()`; props `level 0..1`, `state: ok|low|used|toppingUp` → `hud` variants; children (text) centred.
