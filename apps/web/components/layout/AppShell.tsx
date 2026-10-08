@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { micro } from '@/lib/money';
 
 
+import { useAuth } from '@/hooks/useAuth';
 import { useMe } from '@/hooks/useMe';
 import { useSession } from '@/hooks/useSession';
 import { useSettings } from '@/hooks/useSettings';
@@ -32,7 +33,12 @@ export function AppShell({ children, title, right }: AppShellProps) {
   const router = useRouter();
   const me = useMe();
   const settings = useSettings();
+  const auth = useAuth();
   useSession(Boolean(me.data));
+
+  useEffect(() => {
+    void auth.restore();
+  }, [auth.restore]);
 
   useEffect(() => {
     if (me.isUnauthenticated) router.replace('/');
