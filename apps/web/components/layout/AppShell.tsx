@@ -8,6 +8,7 @@ import { micro } from '@/lib/money';
 
 
 import { useAuth } from '@/hooks/useAuth';
+import { useBalance } from '@/hooks/useBalance';
 import { useMe } from '@/hooks/useMe';
 import { useSession } from '@/hooks/useSession';
 import { useSettings } from '@/hooks/useSettings';
@@ -34,6 +35,8 @@ export function AppShell({ children, title, right }: AppShellProps) {
   const me = useMe();
   const settings = useSettings();
   const { restore } = useAuth();
+  const qc = useQueryClient();
+  const balance = useBalance(Boolean(me.data));
   useSession(Boolean(me.data));
 
   useEffect(() => {
@@ -44,9 +47,23 @@ export function AppShell({ children, title, right }: AppShellProps) {
     if (me.isUnauthenticated) router.replace('/');
   }, [me.isUnauthenticated, router]);
 
-  // Tempo SDK wiring (deposit, swap, spend permission, open/top-up) lands in Tasks 19–20.
+  // Spend permission and session open/top-up land in Task 20.
   const notYet = (what: string) => () => {
-    toast.info(`${what} arrives with the Tempo SDK wiring`, 'Tasks 19–20');
+    toast.info(`${what} arrives with the session wiring`, 'Task 20');
+  };
+  const onDeposit = () => {
+    openDeposit(qc).catch(() => {
+      toast.error('Deposit was not completed');
+    });
+  };
+  const onSwap = () => {
+    openSwapToUsdce(qc)
+      .then(() => {
+        toast.success('Swapped to USDC.e');
+      })
+      .catch(() => {
+        toast.error('Swap was not completed');
+      });
   };
   const allocation = me.data?.allocation ?? micro(2_000_000);
   const hud = <AllocationHUD allocationMicro={allocation} onTopUp={notYet('Top up')} onOpenAllocation={notYet('Open allocation')} />;
@@ -57,11 +74,11 @@ export function AppShell({ children, title, right }: AppShellProps) {
       {me.data && (
         <WalletSheet
           address={me.data.tempo_address}
-          balances={undefined}
-          balancesLoading={false}
-          onDeposit={notYet('Deposit')}
-          onSwap={notYet('Swap')}
-          swapNeeded={false}
+          balances={balance.data}
+          balancesLoading={balance.isPending}
+          onDeposit={onDeposit}
+          onSwap={onSwap}
+          swapNeeded={balance.hasNonUsdce}
           controls={{
             allocation: me.data.allocation,
             weeklyLimit: me.data.weekly_limit,
