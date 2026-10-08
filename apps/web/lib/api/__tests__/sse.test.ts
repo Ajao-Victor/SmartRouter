@@ -1,7 +1,20 @@
 import { parseFrames, runStream, WATCHDOG_MS } from '../sse';
 
-const start = vi.fn();
-vi.mock('@/lib/api/endpoints', () => ({ api: { run: { start: (...a: unknown[]) => start(...a) as Promise<Response> } } }));
+const start = vi.fn<(body: unknown, signal?: AbortSignal) => Promise<Response>>();
+vi.mock('@/lib/api/endpoints', () => ({ api: { run: { start: (body: unknown, signal?: AbortSignal) => start(body, signal) } } }));
+
+/** A stream that never closes but errors when the fetch signal aborts (like a real fetch). */
+function neverStream(signal?: AbortSignal): Response {
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      start(c) {
+        signal?.addEventListener('abort', () => {
+          c.error(new DOMException('The operation was aborted.', 'AbortError'));
+        });
+      },
+    }),
+  );
+}
 
 function streamOf(chunks: string[], delayMs = 0): Response {
   const enc = new TextEncoder();
@@ -17,7 +30,7 @@ function streamOf(chunks: string[], delayMs = 0): Response {
   return new Response(body, { headers: { 'Content-Type': 'text/event-stream' } });
 }
 
-const body = { quote_id: 'q', chat_id: 'c', model_id: 'm' };
+const body = { quote_id: 'q', chat_id: 'c', model_id: 'm', prompt: 'hi' };
 
 describe('parseFrames', () => {
   it('splits complete frames and keeps the partial tail', () => {
@@ -62,8 +75,7 @@ describe('runStream', () => {
 
   it('times out after 45 s of silence', async () => {
     vi.useFakeTimers();
-    const never = new Response(new ReadableStream<Uint8Array>({ start() { /* never closes */ } }));
-    start.mockResolvedValue(never);
+    start.mockImplementation((_b, signal) => Promise.resolve(neverStream(signal)));
     const p = runStream(body, {});
     await vi.advanceTimersByTimeAsync(WATCHDOG_MS + 10);
     const out = await p;
@@ -73,8 +85,7 @@ describe('runStream', () => {
   });
 
   it('reports abort when the caller cancels', async () => {
-    const never = new Response(new ReadableStream<Uint8Array>({ start() { /* never closes */ } }));
-    start.mockResolvedValue(never);
+    start.mockImplementation((_b, signal) => Promise.resolve(neverStream(signal)));
     const ac = new AbortController();
     const p = runStream(body, {}, ac.signal);
     ac.abort();
