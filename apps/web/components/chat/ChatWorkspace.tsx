@@ -26,6 +26,7 @@ import { TopUpBar } from '@/components/allocation/TopUpBar';
 import { Composer } from '@/components/chat/Composer';
 import { ModelPicker } from '@/components/chat/ModelPicker';
 import { Thread } from '@/components/chat/Thread';
+import { ThreadNotes } from '@/components/chat/ThreadNotes';
 import { useGlowTrail } from '@/components/fx/GlowTrail';
 import { RecommendationPanel } from '@/components/recommend/RecommendationPanel';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -181,6 +182,13 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
           )}
         </AnimatePresence>
       </Thread>
+
+      <ThreadNotes
+        chatTask={chat.data.task_type}
+        turnTask={quoteFresh && quoteData ? quoteData.classification.task_type : null}
+        hasSummary={chat.data.summary !== null}
+        contextTokens={quoteFresh && quoteData ? quoteData.quote.context_tokens : null}
+      />
 
       <RecommendationPanel
         data={quoteFresh ? quoteData : null}
