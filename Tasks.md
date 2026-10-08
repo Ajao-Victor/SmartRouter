@@ -67,7 +67,7 @@
 **Animations:** definitions only.
 **Acceptance:** importing variants is side-effect free; test passes.
 
-### Task 5 — Zustand stores  `todo`
+### Task 5 — Zustand stores  `done` (2026-10-08; commits: 5eb06f2 e92620b b3f0b89 c21237f 1585bcd c99fdf4 39879e6 f98aa96 96451e0 c0e9b80 162104d 7283f95 fce803a 7ddc388 dfe7c36 973771d 03528dd)
 **Files**
 - `stores/uiStore.ts` — `activeDialog: null|'modelPicker'|'waitlist'|'spendPermission'`, `walletSheetOpen`, `compareMode`, `theme`, `forceReducedMotion`, `sdkDialogOpen` (pauses WebGL); actions `openDialog`, `closeDialog`, `toggleWallet`, `setSdkDialogOpen`, `reset`.
 - `stores/composerStore.ts` — `draft`, `attachments: File[]`, `category`, `sliderOverride`, `selectedModelId`, `compareModelIds: [string?, string?]`; actions `setDraft`, `addAttachment` (allowlist + size check; size constant `MAX_UPLOAD_BYTES` TBD → default 10 MB with a `// GAP` comment), `removeAttachment`, `selectModel`, `reset`.
