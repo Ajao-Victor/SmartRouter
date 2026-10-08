@@ -40,12 +40,14 @@
 |---|---|
 | Docs suite (12 files) | ✅ generated Oct 8, 2026 |
 | Phase 0 Alignment | ⬜ |
-| Phase 1 Setup | 🟡 Tasks 1–2 done (Oct 8, 2026); Tasks 3–8 next |
+| Phase 1 Setup | 🟡 Tasks 1–3 done (Oct 8, 2026); Tasks 4–8 next |
 | Phase 2 Core UI | ⬜ |
 | Phase 3 Integration | ⬜ |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 3 (2026-10-08) — design system foundation.** `styles/tokens.css`: full dark token set + `[data-theme='light']` overrides, registered `@property --angle` / `--level`, beam/conic/slider gradients, glow shadows (accent, teal, free, signal, warn, dock, sheet), radii, z-index contract (field 0 · content 10 · dock 20 · drawer 30 · sheet 40 · toast 50), easings/durations. `styles/animations.css`: 15 keyframes (hue-drift, float, breathe, spin-angle, shimmer, stripes, caret, pulse-soft, scanline, grid-drift, glitch-a/b, ripple, spin-slow). `app/globals.css`: Tailwind v4 `@theme inline` mapping (colours, display type scale `text-display-sm/display/display-lg`, `text-2xs`, tracking, glow shadows, `animate-*`), custom variants (`hocus`, `motion-ok`, `reduced`, `light`, `selected`, `streaming`), and 30+ utilities (`num`, `glass`, `glass-strong`, `text-beam`, `bg-beam`, `bg-beam-soft`, `bg-slider-track`, `conic-border(-ring/-mask)`, `shimmer-line`, `dashed-card`, `bg-field-fallback`, `bg-grid-field`, `bg-noise`, `bg-stripes-warn`, `caret-stream`, `scanline-once`, `glitch-text`, `dock-float`, `z-field…z-toast`, `hit-44`, `scrollbar-none`, `perspective-900`, `preserve-3d`); global reduced-motion kill-switch. `lib/fonts.ts`: Space Grotesk (display), Inter (UI), JetBrains Mono (numbers/code) via next/font. Root layout stacks field + grid + noise backdrops. Dev-only `/dev/tokens` gallery (404 in production). Verified: lint, typecheck, 23 tests, `next build` clean (home 142 kB first-load JS, CSS 33 kB).
 
 - **Task 2 (2026-10-08) — env, money, API client.** `lib/env.ts` (Zod-validated `NEXT_PUBLIC_*`, literal references so Next inlines them; hex-address checks for payee/USDC.e); `lib/money.ts` (branded integer `MicroUsd`, `roundUpToTenThousandth`, `applyFee` = cost + 10% rounded up, `formatUsd` → "$0.0008"/"$0.026"/"$2.00", `ratioLabel`, `savingLine`); `lib/api/types.ts` (TEMP Zod schemas mirroring the PDF core tables; `mpp_url` deliberately omitted from the model DTO); `lib/api/keys.ts` (query-key factory + `QUOTE_TTL_MS` 5 min); `lib/api/client.ts` (`apiFetch` with `credentials:'include'`, `X-Requested-With`, schema validation, `ApiError` codes; `apiStream` for `/run`); `lib/api/endpoints.ts` (all proposed routes in one swappable file; `RUN_PATH='/run'`). Verified: lint clean, typecheck clean, 23 tests passing (money 11, client 10, home 2), guard:hosts OK.
 
@@ -55,6 +57,10 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | Tailwind v4 CSS-first: theme, variants and utilities live in `app/globals.css` + `styles/*.css`; `tailwind.config.ts` only scopes content | v4 convention; `@theme inline` keeps `var()` references so `[data-theme='light']` swaps every utility |
+| 2026-10-08 | Elevation = glow + hairline shadows only; no drop shadows | design.md material language; reads well on OLED mobile |
+| 2026-10-08 | Dark is native (`<html data-theme="dark">`); light is an override block, not a separate stylesheet | Hackathon immersion; light remains available for demos/judges |
+| 2026-10-08 | Global `prefers-reduced-motion` kill-switch in `@layer base` plus `motion-ok`/`reduced` variants | Accessibility baseline before any Framer/WebGL work (Task 4/7) |
 | 2026-10-08 | Frontend state: TanStack Query (server) + Zustand (client) | PDF does not prescribe; small, fast, streaming-friendly |
 | 2026-10-08 | Animation stack: Framer Motion + three.js/R3F/drei, capability- and reduced-motion-gated | Hackathon showpiece per `design.md`; Nigeria mobile users need fallbacks |
 | 2026-10-08 | REST endpoints beyond `/run` are **proposed**, isolated in `lib/api/endpoints.ts` | PDF defers to a Backend Architecture doc we don't have |
@@ -91,6 +97,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08 (session 4)** — Executed **Task 3** (tokens, keyframes, Tailwind theme + utility layer, fonts, layout backdrops, dev token gallery). Pinned `outputFileTracingRoot` to the monorepo. No new packages. Next: "execute task 4" (motion library + reduced-motion provider).
 
 - **2026-10-08 (session 3)** — Executed **Task 2** (env, money helpers, API types/keys/client/endpoints + 21 new tests). No new packages added. Next: "execute task 3" (design tokens, fonts, Tailwind theme, global styles).
 
