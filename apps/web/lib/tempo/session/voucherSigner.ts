@@ -12,9 +12,7 @@ const PREFIX = 'sr:signer:';
 const memory = new Map<string, CryptoKeyPair>();
 
 function subtle(): SubtleCrypto {
-  const s = globalThis.crypto.subtle;
-  if (!s) throw new Error('WebCrypto is unavailable');
-  return s;
+  return globalThis.crypto.subtle;
 }
 
 function toHex(buf: ArrayBuffer): string {
