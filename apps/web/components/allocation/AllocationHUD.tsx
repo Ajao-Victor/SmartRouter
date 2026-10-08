@@ -46,7 +46,7 @@ export function AllocationHUD({ allocationMicro, onTopUp, onOpenAllocation }: Al
   const ring: RingState = status === 'toppingUp' ? 'toppingUp' : status === 'used' ? 'used' : low ? 'low' : 'ok';
 
   return (
-    <div className="relative">
+    <div className="relative" data-hud="allocation">
       <button
         type="button"
         aria-expanded={open}
