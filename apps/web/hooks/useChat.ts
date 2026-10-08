@@ -30,6 +30,11 @@ export function useChatCache(chatId: string) {
         prev ? { ...prev, messages: prev.messages.map((m) => (m.id === messageId ? { ...m, ...patch } : m)) } : prev,
       );
     },
+    remove: (messageId: string) => {
+      qc.setQueryData<ChatWithMessages>(key, (prev) =>
+        prev ? { ...prev, messages: prev.messages.filter((m) => m.id !== messageId), message_count: Math.max(0, prev.message_count - 1) } : prev,
+      );
+    },
     setCurrentModel: (modelId: string) => {
       qc.setQueryData<ChatWithMessages>(key, (prev) => (prev ? { ...prev, current_model_id: modelId } : prev));
     },
