@@ -15,3 +15,12 @@ Each beat maps to a Journey in `User_Journey.md` and an effect in `design.md` §
 | 2:35–3:00 | Receipt | Open the receipt: model, price, provider cost, latency, session id; the tx hash decodes after settlement | "Every reply has a receipt. The session id is there instantly; the on-chain hash lands when SmartRouter settles — every dollar or every hour." |
 
 Scenario hooks on mocks: add `[retry]` to a prompt for the retry-on-next-model notice, `[fail]` for the rerun-free path, `[slow]` for a slower stream.
+
+## Rehearsal and recording
+
+- `pnpm test:e2e` walks the whole path above on mocks (mobile + desktop projects, `tests/e2e/demo.spec.ts`).
+- `pnpm test:e2e:record` records the desktop walk-through at 1280×800 to
+  `test-results/**/video.webm` (gitignored, ~10 MB, ~70 s). Use it as the timing reference for the
+  voice-over, then record the real take by hand with the dev server (`NEXT_PUBLIC_MOCK=1 pnpm dev`).
+- The browser mock starts with **no allocation** so the Deposit → Allocation beats are real; a page
+  reload resets the mock state (and the in-memory session channel), so do not reload mid-take.
