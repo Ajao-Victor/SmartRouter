@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { clsx } from 'clsx';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, type Variants } from 'motion/react';
 
 import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';
 
@@ -25,7 +25,7 @@ const sliceA = {
     clipPath: ['inset(0 0 85% 0)', 'inset(40% 0 30% 0)', 'inset(10% 0 60% 0)', 'inset(0 0 100% 0)'],
     transition: { duration: DURATION, times: [0, 0.3, 0.7, 1] },
   },
-} as const;
+} satisfies Variants;
 
 const sliceB = {
   hidden: { opacity: 0 },
@@ -35,13 +35,13 @@ const sliceB = {
     clipPath: ['inset(70% 0 0 0)', 'inset(10% 0 60% 0)', 'inset(55% 0 20% 0)', 'inset(100% 0 0 0)'],
     transition: { duration: DURATION, times: [0, 0.3, 0.7, 1], delay: 0.04 },
   },
-} as const;
+} satisfies Variants;
 
 const base = {
   hidden: { opacity: 0, filter: 'blur(4px)' },
   visible: { opacity: 1, filter: 'blur(0px)', transition: { duration: 0.35, delay: 0.15 } },
   exit: { opacity: 0, transition: { duration: 0.12 } },
-} as const;
+} satisfies Variants;
 
 /**
  * Three-layer glitch reveal: two hue-shifted slices tear across while the base text blurs in
@@ -71,7 +71,8 @@ export function GlitchText({ text, className, as = 'span', triggerKey }: GlitchT
   }
 
   return (
-    <span className={clsx('relative inline-block', className)} aria-label={text} role="text">
+    <span className={clsx('relative inline-block', className)}>
+      <span className="sr-only">{text}</span>
       <AnimatePresence mode="wait" initial>
         <Tag
           key={String(key)}
