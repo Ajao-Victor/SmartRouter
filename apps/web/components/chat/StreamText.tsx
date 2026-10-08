@@ -71,7 +71,6 @@ export function StreamText({ messageId, content, className }: StreamTextProps) {
     return (
       <div className={clsx('max-w-[68ch] text-base text-text-0', className)}>
         <Markdown>{text}</Markdown>
-        <noscript className="whitespace-pre-wrap">{text}</noscript>
       </div>
     );
   }
