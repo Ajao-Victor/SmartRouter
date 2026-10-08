@@ -323,7 +323,7 @@
 - `docs/demo-script.md` with the 3-minute choreography from `design.md` §7 and timing.
 **Acceptance:** e2e passes on mobile + desktop projects; a screen recording of the mock path exists.
 
-### Task 29 — README, architecture diagram, PWA manifest (optional), final memory  `todo`
+### Task 29 — README, architecture diagram, PWA manifest (optional), final memory  `done` (2026-10-08; commits: eb4bc2e 62bf7d0 9920db8 f107a53 3efac23 71fad69 7b7c457 5bbb11e 8bfbb63 c7a563f)
 - Root `README.md`: product summary (pitch), architecture diagram (ASCII from `architecture.md` §1 or an SVG), how to run web, flags, attribution/licences (LMArena CC-BY-4.0 credit; Artificial Analysis).
 - `public/manifest.webmanifest` + icons (PWA later per PDF — optional).
 - Final `memory.md` status board; `Tasks.md` all statuses set.
