@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import type { NextConfig } from 'next';
 
 /**
@@ -58,6 +60,8 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Monorepo root for file tracing (silences the multiple-lockfile warning).
+  outputFileTracingRoot: path.join(__dirname, '../../'),
   images: {
     remotePatterns: objectStorageHost
       ? [{ protocol: 'https', hostname: objectStorageHost }]
