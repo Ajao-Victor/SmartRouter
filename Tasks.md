@@ -243,7 +243,7 @@
 **Acceptance:** on testnet, sign-in sets the cookie and `/api/me` returns the user; cancel path shows toast "Sign-in cancelled".
 **Gap handling:** if SDK method names differ from assumptions, adapt and record in `memory.md`.
 
-### Task 19 — Balances, deposit and swap dialogs  `todo`
+### Task 19 — Balances, deposit and swap dialogs  `done` (2026-10-08; commits: 4d39f72 d3625fe 2a39686 668a479 03cf0e1 0b9d587)
 **Files**
 - `hooks/useBalance.ts` — reads balances via the SDK (PDF: wallet balances are read from Tempo, never stored); `['wallet','balance']`, refetch 15 s while sheet open; returns per-token micro amounts and `hasNonUsdce`.
 - `lib/tempo/deposit.ts` — open the SDK deposit flow (`wallet_deposit`): chain, token, amount; on close → invalidate balance.
