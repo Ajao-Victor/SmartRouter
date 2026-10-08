@@ -42,10 +42,12 @@
 | Phase 0 Alignment | ⬜ |
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
 | Phase 2 Core UI | ✅ Tasks 9–17 done (Oct 8, 2026) |
-| Phase 3 Integration | 🟡 Task 18 done (Oct 8, 2026); Tasks 19–25 next |
+| Phase 3 Integration | 🟡 Tasks 18–19 done (Oct 8, 2026); Tasks 20–25 next |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 19 (2026-10-08) — balances, deposit, swap.** `hooks/useBalance` (reads balances through the Tempo adapter — never stored; 15 s refetch while the wallet sheet is open; `hasNonUsdce`, `usdce`). `lib/tempo/deposit.ts` (`openDeposit`: SDK deposit dialog then balance refetch so the splash animates). `lib/tempo/swap.ts` (`openSwapToUsdce`: SDK swap screen then refetch). AppShell wires live balances, Deposit and the conditional Swap button into the WalletSheet. Verified: lint, typecheck, 122 tests (34 files).
 
 - **Task 18 (2026-10-08) — Tempo sign-in + SIWE (`lib/tempo/`).** `types.ts`: `TempoAccountsAdapter` interface (init, getAccount, signIn passkey dialog, signOut, signMessage, getBalances, openDeposit, openSwap, request/get/revoke spend permission, onDialog). `mock.ts`: `MockTempoAccounts` simulating every SDK dialog with a delay while emitting open/close (persisted account + permission in IndexedDB; demo balances USDC.e $12.50 + OUSD $4.00; deposit adds $2 USDC.e; swap folds other tokens into USDC.e). `accounts.ts`: `getTempoAccounts()` returns the mock on testnet/mock (loud console warning on mainnet until the real SDK lands — Gaps §3) and pipes dialog events into `uiStore.sdkDialogOpen` (WebGL pauses, overlays never cover the SDK). `siwe.ts`: EIP-4361 message builder (placeholder chain ids 4217/4216 — Gaps §5.4) and `signInWithEthereum` (nonce → sign → verify → user). `hooks/useAuth`: signIn (walletStore initialising→connecting→signing→connected; cancel → "Sign-in cancelled"; failure → "Couldn't verify your signature. Try again."), signOut (logout + adapter signOut + `qc.clear()` + `resetAllStores()`), restore. Landing "Sign in with passkey" → passkey flow → `/chat`; Settings "Sign out"; AppShell restores the account on mount. Also fixed the Task 17 receipt test (provider cost shows four decimals). Verified: lint, typecheck, 121 tests (33 files).
 
@@ -87,6 +89,7 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | Deposit/swap are plain async flows that invalidate the balance query; the UI reacts to the data change | Keeps SDK dialogs out of React state; the BalanceList splash triggers from the balance delta |
 | 2026-10-08 | All wallet UX goes through `TempoAccountsAdapter`; the mock runs on testnet/mock and the real SDK is a single file swap | Backend_Gaps_Report §3/§8 unresolved; keeps every flow demoable now |
 | 2026-10-08 | SIWE statement: "Sign in to SmartRouter. This does not move any funds." | Clear consent copy; exact fields to confirm (Gaps §6.1) |
 | 2026-10-08 | Receipt polling stops for free runs and after 2 h | Free turns never settle on-chain (PDF); bounded polling avoids runaway requests |
@@ -149,6 +152,8 @@
 
 ## Assumptions currently in code
 
+- Mock deposit always adds $2 USDC.e and mock swap folds every other token into USDC.e.
+
 - Mock signatures are deterministic `0xmock…` strings; the mock API accepts any signature.
 - Tempo chain ids (4217 testnet / 4216 mainnet) are placeholders.
 
@@ -186,6 +191,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 19** (useBalance, deposit, swap, shell wiring, test). No new packages. Next: "execute task 20".
 
 - **2026-10-08** — Executed **Task 18** (Tempo adapter interface + mock, SIWE, useAuth, landing/settings/shell wiring, tests). Note: Task 17's tracking ran before its last test fix; the fix landed in this range. No new packages. Next: "execute task 19".
 
