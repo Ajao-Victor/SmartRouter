@@ -283,7 +283,7 @@
 - `components/chat/ThreadNotes.tsx` — info notes: "Image/music turns send only the new prompt plus a one-line summary" when switching to image/music in a text chat; "Older turns summarised" when `chat.summary` present; title `GlitchText` when `chat.title` first arrives.
 **Acceptance:** switching model mid-chat keeps one thread and new replies carry the new model tag.
 
-### Task 23 — Async jobs, images, Compare execution, feedback  `todo`
+### Task 23 — Async jobs, images, Compare execution, feedback  `done` (2026-10-08; commits: 9dca5e6 21fa227 2686a27 df03004 0b29885 b4a81bd 3baddb3 1e0d7f4 02c6cbf e0f5a94 cd478e3)
 **Files**
 - `hooks/useJob.ts` — `['job', id]` poll 3 s until `done|failed` (proposed `/api/jobs/:id`); on done update message `result_ref` → MediaCard morph.
 - Wire `event: file` → MediaCard; `event: job` → JobCard (music flag `NEXT_PUBLIC_FLAG_MUSIC`).
