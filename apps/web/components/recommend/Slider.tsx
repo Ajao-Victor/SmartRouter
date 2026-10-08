@@ -23,9 +23,9 @@ export function PresetSlider({ value, onChange, disabled = false, className }: P
       <div className="mb-1 flex items-center justify-between">
         <p className="num text-2xs tracking-wider-ui text-text-2 uppercase">Price vs quality</p>
         <Tooltip content={`Weights · quality ${String(w.quality)} · price ${String(w.price)} · speed ${String(w.speed)}`}>
-          <span className="num cursor-help text-2xs text-text-2" tabIndex={0}>
+          <button type="button" className="num cursor-help rounded-pill text-2xs text-text-2" aria-label="Show ranking weights">
             q {w.quality} · p {w.price} · s {w.speed}
-          </span>
+          </button>
         </Tooltip>
       </div>
       <Slider
