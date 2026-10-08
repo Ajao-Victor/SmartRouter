@@ -1,0 +1,128 @@
+/*
+  SmartRouter design tokens — UI_UX_Brief.md §2–4, design.md §1.
+  Dark is the product's native theme; light is a secondary override.
+  Every colour is a CSS variable so the Tailwind @theme mapping (globals.css) swaps per theme.
+*/
+
+/* Rotating conic border angle (HoloCard). Registered so it can be animated. */
+@property --angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* Liquid fill level 0–1 (LiquidRing). */
+@property --level {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+:root {
+  color-scheme: dark;
+
+  /* ---- surfaces ---- */
+  --bg-0: #05060a;
+  --bg-1: #0b0e17;
+  --bg-2: #121626;
+  --bg-3: #1a1f36;
+  --glass: rgba(18, 22, 38, 0.55);
+  --glass-strong: rgba(11, 14, 23, 0.82);
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+
+  /* ---- text ---- */
+  --text-0: #f2f4ff;
+  --text-1: #a7adc6;
+  --text-2: #6b7190;
+  --text-inverse: #05060a;
+
+  /* ---- semantic ---- */
+  --accent: #7c5cff; /* router violet — intelligence, routing, primary actions */
+  --accent-hi: #a08cff;
+  --accent-2: #19e6c1; /* Tempo teal — money, balances, vouchers */
+  --accent-2-hi: #6ff5de;
+  --signal: #ff5c8a; /* errors, "allocation used" */
+  --warn: #ffb547; /* quote expiring, low allocation */
+  --free: #9be15d; /* free model identity */
+  --quality: #5cc8ff;
+  --price: #19e6c1;
+  --speed: #ffd166;
+
+  /* ---- light = money / intelligence (design.md §1) ---- */
+  --beam: linear-gradient(120deg, #7c5cff 0%, #19e6c1 100%);
+  --beam-soft: linear-gradient(120deg, rgba(124, 92, 255, 0.35), rgba(25, 230, 193, 0.35));
+  --beam-conic: conic-gradient(
+    from var(--angle),
+    transparent 0deg,
+    var(--accent) 60deg,
+    var(--accent-2) 120deg,
+    transparent 180deg,
+    transparent 360deg
+  );
+  --slider-track: linear-gradient(90deg, #19e6c1 0%, #7c5cff 50%, #5cc8ff 100%);
+  --glow-accent: 0 0 0 1px var(--line), 0 0 48px -12px var(--accent);
+  --glow-accent-strong: 0 0 0 1px var(--accent), 0 0 64px -8px var(--accent);
+  --glow-teal: 0 0 0 1px var(--line), 0 0 48px -12px var(--accent-2);
+  --glow-free: 0 0 0 1px var(--line), 0 0 48px -12px var(--free);
+  --glow-signal: 0 0 0 1px var(--line), 0 0 48px -12px var(--signal);
+  --glow-warn: 0 0 0 1px var(--line), 0 0 48px -12px var(--warn);
+  --elev-dock: 0 0 0 1px var(--line), 0 20px 60px -30px #000;
+  --elev-sheet: 0 0 0 1px var(--line), 0 -20px 80px -30px rgba(124, 92, 255, 0.35);
+
+  /* ---- radii / blur ---- */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+  --blur-glass: 18px;
+
+  /* ---- z-index contract (architecture.md §7) ---- */
+  --z-field: 0;
+  --z-content: 10;
+  --z-dock: 20;
+  --z-drawer: 30;
+  --z-sheet: 40;
+  --z-toast: 50;
+
+  /* ---- motion ---- */
+  --ease-snappy: cubic-bezier(0.2, 0.9, 0.2, 1);
+  --ease-liquid: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 180ms;
+  --dur-base: 320ms;
+  --dur-slow: 600ms;
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+
+  --bg-0: #f7f8fc;
+  --bg-1: #ffffff;
+  --bg-2: #eef1f8;
+  --bg-3: #e3e7f3;
+  --glass: rgba(255, 255, 255, 0.6);
+  --glass-strong: rgba(255, 255, 255, 0.85);
+  --line: rgba(10, 14, 30, 0.08);
+  --line-strong: rgba(10, 14, 30, 0.16);
+
+  --text-0: #0a0e1e;
+  --text-1: #4b5270;
+  --text-2: #8a90ad;
+  --text-inverse: #f7f8fc;
+
+  --accent: #5b3df5;
+  --accent-hi: #7c5cff;
+  --accent-2: #0fb89a;
+  --accent-2-hi: #19e6c1;
+  --signal: #e0356a;
+  --warn: #d98a12;
+  --free: #5fa322;
+  --quality: #1e8fd6;
+  --price: #0fb89a;
+  --speed: #d9a400;
+
+  --beam: linear-gradient(120deg, #5b3df5 0%, #0fb89a 100%);
+  --elev-dock: 0 0 0 1px var(--line), 0 20px 60px -30px rgba(10, 14, 30, 0.4);
+  --elev-sheet: 0 0 0 1px var(--line), 0 -20px 80px -30px rgba(91, 61, 245, 0.25);
+}
