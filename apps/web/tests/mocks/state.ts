@@ -198,8 +198,7 @@ export function pollRequest(id: string): RequestReceipt | null {
   if (r.polls >= 2 && !r.is_free && !r.tx_hash) {
     r.tx_hash = `0x${'ab12'.repeat(16)}`;
   }
-  const { polls: _p, ...receipt } = r;
-  _p;
+  const { polls: _polls, ...receipt } = r;
   return receipt;
 }
 
