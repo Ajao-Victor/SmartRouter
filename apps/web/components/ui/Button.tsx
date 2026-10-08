@@ -63,12 +63,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 ) {
   const reduced = useReducedMotionSafe();
   const isDisabled = disabled === true || loading;
-  const motionProps = reduced
-    ? {}
-    : {
-        whileHover: isDisabled ? undefined : { scale: 1.02, transition: springs.magnet },
-        whileTap: isDisabled ? undefined : { scale: 0.97, transition: springs.snappy },
-      };
+  const motionProps =
+    reduced || isDisabled
+      ? {}
+      : {
+          whileHover: { scale: 1.02, transition: springs.magnet },
+          whileTap: { scale: 0.97, transition: springs.snappy },
+        };
 
   return (
     <motion.button
@@ -90,8 +91,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         <motion.span
           aria-hidden="true"
           className="h-4 w-4 rounded-full border-2 border-current border-t-transparent"
-          animate={reduced ? undefined : { rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
+          {...(reduced
+            ? {}
+            : { animate: { rotate: 360 }, transition: { repeat: Infinity, duration: 0.8, ease: 'linear' } })}
         />
       )}
       <span className={clsx('inline-flex items-center gap-2', loading && 'opacity-80')}>{children}</span>
