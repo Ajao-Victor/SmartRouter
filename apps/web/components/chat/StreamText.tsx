@@ -61,7 +61,7 @@ export function StreamText({ messageId, content, className }: StreamTextProps) {
 
   if (!live) {
     const text = entry && entry.tokens.length > 0 ? entry.tokens.join('') : content;
-    return <Markdown className={className}>{text}</Markdown>;
+    return <Markdown {...(className ? { className } : {})}>{text}</Markdown>;
   }
 
   return (
