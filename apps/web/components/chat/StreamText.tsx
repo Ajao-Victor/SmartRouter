@@ -2,14 +2,21 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import dynamic from 'next/dynamic';
+
 import { clsx } from 'clsx';
 import { motion } from 'motion/react';
 
-import { Markdown } from '@/lib/markdown';
 import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';
 import { tokenBatch, withReduced } from '@/lib/motion/variants';
 
 import { selectEntry, useStreamStore } from '@/stores/streamStore';
+
+/** Markdown (react-markdown + GFM + sanitize) is lazy so it stays out of the chat route's first load. */
+const Markdown = dynamic(() => import('@/lib/markdown').then((m) => m.Markdown), {
+  ssr: false,
+  loading: () => null,
+});
 
 export interface StreamTextProps {
   messageId: string;
@@ -61,7 +68,12 @@ export function StreamText({ messageId, content, className }: StreamTextProps) {
 
   if (!live) {
     const text = entry && entry.tokens.length > 0 ? entry.tokens.join('') : content;
-    return <Markdown {...(className ? { className } : {})}>{text}</Markdown>;
+    return (
+      <div className={clsx('max-w-[68ch] text-base text-text-0', className)}>
+        <Markdown>{text}</Markdown>
+        <noscript className="whitespace-pre-wrap">{text}</noscript>
+      </div>
+    );
   }
 
   return (
