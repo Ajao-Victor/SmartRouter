@@ -1,3 +1,4 @@
+import { mockSessionOpen } from './fixtures';
 import { server } from './server';
 import { resetMockState, state } from './state';
 
@@ -64,7 +65,8 @@ describe('mock API', () => {
   }, 15_000);
 
   it('rejects over-allocation and exhausted free quota per the PDF rules', async () => {
-    resetMockState({ session: { ...state.session!, highest_voucher: state.session!.deposit } , freeMessages: 30 });
+    const open = mockSessionOpen();
+    resetMockState({ session: { ...open, highest_voucher: open.deposit }, freeMessages: 30 });
     const chat = (await (await fetch(`${API}/api/chats`, { method: 'POST', body: JSON.stringify({ first_prompt: 'hello' }) })).json()) as { id: string };
     const q = (await (await fetch(`${API}/api/chats/${chat.id}/quote`, { method: 'POST', body: JSON.stringify({ prompt: 'hello' }) })).json()) as { quote: { id: string; model_id: string; price: number } };
     const paid = await fetch(`${API}/run`, { method: 'POST', body: JSON.stringify({ quote_id: q.quote.id, chat_id: chat.id, model_id: q.quote.model_id, voucher: { channel_id: 'x', cumulative_amount: 1, signature: 's' } }) });
