@@ -12,7 +12,7 @@ const compat = new FlatCompat({ baseDirectory: import.meta.dirname });
  */
 export default defineConfig(
   {
-    ignores: ['.next/**', 'node_modules/**', 'playwright-report/**', 'test-results/**', 'next-env.d.ts'],
+    ignores: ['.next/**', 'node_modules/**', 'playwright-report/**', 'test-results/**', 'next-env.d.ts', 'public/**'],
   },
   ...compat.extends('next/core-web-vitals'),
   ...tsConfigs.strictTypeChecked,
@@ -31,6 +31,10 @@ export default defineConfig(
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-misused-promises': 'error',
       '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { ignoreRestSiblings: true, argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       'react/jsx-no-target-blank': 'error',
       'import/order': [
         'error',
