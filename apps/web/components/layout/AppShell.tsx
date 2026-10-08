@@ -16,11 +16,15 @@ import { openSwapToUsdce } from '@/lib/tempo/swap';
 import { useAuth } from '@/hooks/useAuth';
 import { useBalance } from '@/hooks/useBalance';
 import { useMe } from '@/hooks/useMe';
+import { useOpenAllocation } from '@/hooks/useOpenAllocation';
 import { useSession } from '@/hooks/useSession';
 import { useSettings } from '@/hooks/useSettings';
+import { useSpendPermission } from '@/hooks/useSpendPermission';
+import { useTopUp } from '@/hooks/useTopUp';
 import { toast } from '@/stores/toastStore';
 
 import { AllocationHUD } from '@/components/allocation/AllocationHUD';
+import { burstAt, useParticleBurst } from '@/components/fx/ParticleBurst';
 import { TopBar } from '@/components/layout/TopBar';
 import { ReceiptDrawer } from '@/components/receipt/ReceiptDrawer';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -43,6 +47,10 @@ export function AppShell({ children, title, right }: AppShellProps) {
   const { restore } = useAuth();
   const qc = useQueryClient();
   const balance = useBalance(Boolean(me.data));
+  const permission = useSpendPermission(Boolean(me.data));
+  const openAllocation = useOpenAllocation();
+  const topUp = useTopUp();
+  const burst = useParticleBurst();
   useSession(Boolean(me.data));
 
   useEffect(() => {
@@ -53,9 +61,16 @@ export function AppShell({ children, title, right }: AppShellProps) {
     if (me.isUnauthenticated) router.replace('/');
   }, [me.isUnauthenticated, router]);
 
-  // Spend permission and session open/top-up land in Task 20.
-  const notYet = (what: string) => () => {
-    toast.info(`${what} arrives with the session wiring`, 'Task 20');
+  const allocationMicro = me.data?.allocation ?? micro(2_000_000);
+  const onOpenAllocation = () => {
+    openAllocation.mutate(allocationMicro);
+  };
+  const onTopUp = () => {
+    topUp.mutate(allocationMicro, {
+      onSuccess: () => {
+        burst(burstAt({ clientX: window.innerWidth - 60, clientY: 40 }, '#19E6C1', 70));
+      },
+    });
   };
   const onDeposit = () => {
     openDeposit(qc).catch(() => {
@@ -71,8 +86,7 @@ export function AppShell({ children, title, right }: AppShellProps) {
         toast.error('Swap was not completed');
       });
   };
-  const allocation = me.data?.allocation ?? micro(2_000_000);
-  const hud = <AllocationHUD allocationMicro={allocation} onTopUp={notYet('Top up')} onOpenAllocation={notYet('Open allocation')} />;
+  const hud = <AllocationHUD allocationMicro={allocationMicro} onTopUp={onTopUp} onOpenAllocation={onOpenAllocation} />;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -98,9 +112,19 @@ export function AppShell({ children, title, right }: AppShellProps) {
               });
             },
           }}
-          permission={{ status: 'none', onApprove: notYet('Spend permission'), onRevoke: notYet('Revoke') }}
-          onOpenAllocation={notYet('Open allocation')}
-          onTopUp={notYet('Top up')}
+          permission={{
+            status: permission.status,
+            expiresAt: permission.data?.expiresAt ?? null,
+            busy: permission.approve.isPending || permission.revoke.isPending,
+            onApprove: () => {
+              permission.approve.mutate();
+            },
+            onRevoke: () => {
+              permission.revoke.mutate();
+            },
+          }}
+          onOpenAllocation={onOpenAllocation}
+          onTopUp={onTopUp}
         />
       )}
       <ReceiptDrawer />
