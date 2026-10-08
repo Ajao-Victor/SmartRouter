@@ -40,7 +40,7 @@ beforeEach(() => {
   useAllocationStore.getState().reset();
   useSignerStore.getState().reset();
   setTempoAccountsForTests(new MockTempoAccounts(0));
-  setSessionClientForTests(new MockSessionClient(0));
+  setSessionClientForTests(new MockSessionClient());
 });
 
 function wrapper({ children }: { children: React.ReactNode }) {
