@@ -79,7 +79,7 @@ describe('useRun', () => {
     expect(body.quote_id).toBe('q1');
     expect(body.voucher?.cumulative_amount).toBe(900);
     expect(useSignerStore.getState().cumulativeMicro).toBe(900);
-    expect(useAllocationStore.getState().remainingMicro).toBe(1_100_000);
+    expect(useAllocationStore.getState().remainingMicro).toBe(1_999_100);
     const chat = qc.getQueryData<ChatWithMessages>(queryKeys.chat('c'));
     expect(chat?.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
     expect(chat?.messages[1]).toMatchObject({ content: 'Hi', status: 'done', request_id: 'r1', model_id: 'glm' });
