@@ -41,11 +41,13 @@
 | Docs suite (12 files) | ✅ generated Oct 8, 2026 |
 | Phase 0 Alignment | ⬜ |
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
-| Phase 2 Core UI | 🟡 Tasks 9–15 done (Oct 8, 2026); Tasks 16–17 next |
+| Phase 2 Core UI | 🟡 Tasks 9–16 done (Oct 8, 2026); Task 17 next |
 | Phase 3 Integration | ⬜ |
 | Phase 4 Polish | ⬜ |
 
 ## Completed features
+
+- **Task 16 (2026-10-08) — wallet sheet + settings (`components/wallet/`).** `WalletSheet` (Sheet bound to `uiStore.walletSheetOpen`: address, "Returned $x from closed allocation" notice, `BalanceList` HoloCards with NumberTicker and a teal deposit splash when a balance grows, `DepositButton`, conditional `SwapButton` "Swap to USDC.e" with spinning icon, `AllocationControls` (drum-roll steppers: allocation $1–$50 step $1 default $2; spending limit $5–$500/wk step $5; auto free fallback `Switch`), Open allocation / Top up button by session status, `SpendPermissionCard` (token USDC.e + address, payee SmartRouter + address, scope "open and top up sessions only", expiry; shield-lock animation when granted; plain danger Revoke), two flipping `ComingSoonCard`s → `WaitlistForm` (Zod email, country allowlist NG-first, interest; success pop + burst)). Global `WaitlistDialog` (landing teasers). Settings page (allocation controls, default PresetSlider, spend permission, wallet address + validated explorer link, light theme + reduce-motion switches persisted via uiStore, licence notes). `hooks/useSettings`, `lib/explorer.ts` (placeholder bases; regex-validated tx/address links), `ui/Switch`. AppShell now mounts the HUD + WalletSheet with toast stubs until the SDK wiring (Tasks 19–20). Verified: lint, typecheck, 114 tests (30 files).
 
 - **Task 15 (2026-10-08) — allocation HUD (`components/allocation/`).** `hooks/useSession` (30 s refetch, mirrors into `allocationStore`), `hooks/useFreeUsage`. `AllocationHUD` (44 px LiquidRing of remaining/deposit with ok/low/used/toppingUp; tap → floating panel with deposit/used/remaining and "Top up $2"; "Open allocation · $2" button when none/closed; copy: no automatic top-ups). `TopUpBar` (PDF "Allocation used — Top up $2" via GlitchText; Top up | Continue free MagneticButtons meeting from opposite edges; auto-free notice "Allocation used — continuing free"; Continue free disabled at 30/30). `FreeQuotaMeter` ("Free: n/30 today" segmented meter, signal at the cap). Verified: lint, typecheck, 111 tests (29 files).
 
@@ -81,6 +83,8 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-08 | Spend-permission scope facts are rendered from env (`NEXT_PUBLIC_USDCE_ADDRESS`, `NEXT_PUBLIC_SMARTROUTER_PAYEE`) before approval | security.md §2.3: the user sees token, payee and scope before the single passkey tap |
+| 2026-10-08 | Explorer base URLs are placeholders in `lib/explorer.ts` | Backend_Gaps_Report §10.3 — unconfirmed |
 | 2026-10-08 | Top-up amount shown everywhere = the user's allocation setting (`me.allocation`), default $2 | PDF: "Top up $2" matches the default allocation size |
 | 2026-10-08 | Raw HTML in model output is dropped (no rehype-raw) and sanitised | security.md §6: replies are untrusted |
 | 2026-10-08 | Images use `next/image` with `unoptimized` for non-object-storage hosts | Mock images come from picsum; production object storage stays optimised |
@@ -138,6 +142,9 @@
 
 ## Assumptions currently in code
 
+- Settings exposes both the weekly limit stepper and the PDF's $5/day per-user cap as copy (Gaps §9.2).
+- Allocation stepper bounds ($1–$50) and limit bounds ($5–$500/wk) are UI guesses, not PDF values.
+
 - MessageBubble treats `result_ref` on a history message as an image (mime image/jpeg); audio results arrive via job polling (Task 23).
 
 - Price/speed bar scores are derived client-side from the four options (cheapest = 1); quality comes from the API's rescaled `quality` field.
@@ -169,6 +176,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-08** — Executed **Task 16** (Switch, explorer, useSettings, 9 wallet components, settings page, shell wiring, tests). No new packages. Next: "execute task 17".
 
 - **2026-10-08** — Executed **Task 15** (useSession, useFreeUsage, AllocationHUD, TopUpBar, FreeQuotaMeter, tests). No new packages. Next: "execute task 16".
 
