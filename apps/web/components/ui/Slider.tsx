@@ -129,17 +129,11 @@ export function Slider({ detents, value, onChange, className, disabled = false, 
       >
         {/* track */}
         <div className="bg-slider-track absolute top-1/2 right-0 left-0 h-1.5 -translate-y-1/2 rounded-pill opacity-80" />
-        {/* detent ticks */}
+        {/* detent ticks (decorative; the track snaps to the nearest detent on release) */}
         {detents.map((d, i) => (
-          <button
+          <span
             key={`${id}-${d.label}`}
-            type="button"
-            tabIndex={-1}
             aria-hidden="true"
-            disabled={disabled}
-            onClick={() => {
-              commit(i);
-            }}
             className={clsx(
               'absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full transition-[box-shadow,background-color] duration-200',
               i === value ? 'bg-text-0 shadow-glow-accent' : 'bg-bg-3 shadow-hairline-strong',
