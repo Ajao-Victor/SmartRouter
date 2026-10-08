@@ -194,7 +194,7 @@
 **Animations:** listed; thread items `fadeUp`.
 **Acceptance:** 2,000-token mock stream stays ≥ 50 fps on desktop profile; sanitiser test passes.
 
-### Task 15 — Allocation HUD, TopUpBar, FreeQuotaMeter  `todo`
+### Task 15 — Allocation HUD, TopUpBar, FreeQuotaMeter  `done` (2026-10-08; commits: 9ef319f 3e39a50 38faaf0 3d2697e 32fbf21 b994bcd c637d0e)
 **Files**
 - `hooks/useSession.ts` — `['session','current']` (proposed), refetch 30 s; hydrates `allocationStore`.
 - `hooks/useFreeUsage.ts` — `['free','usage']` (proposed) → `{messages, limit:30}`.
