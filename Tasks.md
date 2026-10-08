@@ -275,7 +275,7 @@
 **Animations:** on run: ParticleBurst + GlowTrail; ring drains; bubble `streaming`; orb `activity` 1; heartbeat pulse.
 **Acceptance:** mock + testnet runs stream to completion; retry notice renders; receipts link works.
 
-### Task 22 — Model switching, suggestions, per-turn quotes, long-chat notes  `todo`
+### Task 22 — Model switching, suggestions, per-turn quotes, long-chat notes  `done` (2026-10-08; commits: e18ce9c 67c04a4 6e14f32 a16cb28)
 **Files**
 - Extend `useQuote` to re-quote on every turn for the current model (PDF: priced on history + new prompt).
 - `ModelPill`/`ModelPicker` → `PATCH /api/chats/:id {current_model_id}` (proposed) + re-quote; `layoutId` crossfade.
