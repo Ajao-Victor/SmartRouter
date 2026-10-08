@@ -60,6 +60,8 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Let CI/phase builds write elsewhere while `next dev` holds `.next` (e.g. NEXT_DIST_DIR=.next-build).
+  distDir: process.env.NEXT_DIST_DIR ?? '.next',
   // Monorepo root for file tracing (silences the multiple-lockfile warning).
   outputFileTracingRoot: path.join(__dirname, '../../'),
   images: {
