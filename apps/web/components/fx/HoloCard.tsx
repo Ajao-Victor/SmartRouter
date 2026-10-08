@@ -61,7 +61,7 @@ export const HoloCard = forwardRef<HTMLDivElement, HoloCardProps>(function HoloC
       ref={t.ref}
       data-selected={selected ? 'true' : 'false'}
       className={clsx(
-        'conic-border relative rounded-lg',
+        'conic-border relative rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
         dashed ? 'dashed-card' : 'glass',
         interactive && 'cursor-pointer',
         className,
