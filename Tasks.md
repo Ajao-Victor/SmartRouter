@@ -264,7 +264,7 @@
 - `lib/tempo/session/__tests__/voucherSigner.test.ts` — key is non-extractable; signatures verify with the public key.
 **Acceptance:** first run shows exactly one spend-permission approval; HUD shows $2.00; Revoke clears status; lint rule blocks any `setInterval` in this folder.
 
-### Task 21 — Quote → allocation check → voucher → `/run` SSE  `todo`
+### Task 21 — Quote → allocation check → voucher → `/run` SSE  `done` (2026-10-08; commits: 052ef5a d6141c2 033ea07 66e5d48 ec60514 4c8a459 f8788ab 6f3e91f 5e42106 3695398 81fb897 b5567c7 9ffdad1 e0154ce c174d70 14f51d4 dac13b6)
 **Files**
 - `lib/api/sse.ts` — `runStream(body, handlers)`: `fetch` POST `/run` with `credentials:'include'`; parse `text/event-stream` from `ReadableStream`; events `meta|token|heartbeat|retry|file|job|done|error` (Zod-validated); 45 s heartbeat watchdog → `error`; abort support.
 - `hooks/useRun.ts` — orchestrates: (1) quote fresh? else re-quote; (2) if `is_free` skip voucher; else `allocationStore.remaining ≥ price` else emit `needsTopUp` (TopUpBar or auto-free when `me.auto_free_fallback`); (3) `signerStore.advance(price)` + `SessionClient.signVoucher(cumulative)`; (4) create optimistic messages; (5) `runStream` → `streamStore`; on `done` → `applyVoucher`, invalidate chat/session/free usage; on `error` without result → `restoreVoucher` (PDF: not counted) and offer rerun free; on `retry` → RetryNotice.
