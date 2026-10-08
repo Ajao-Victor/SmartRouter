@@ -31,6 +31,8 @@ export interface RecommendationPanelProps {
   onApplySuggestion?: (modelId: string) => void;
   /** Register card elements for the GlowTrail (index = card order). */
   cardRef?: (modelId: string, el: HTMLDivElement | null) => void;
+  /** PDF: 30 free messages/day — the free option is disabled at the cap. */
+  freeAvailable?: boolean;
 }
 
 /**
@@ -50,6 +52,7 @@ export function RecommendationPanel({
   onCompareToggle,
   onApplySuggestion,
   cardRef,
+  freeAvailable = true,
 }: RecommendationPanelProps) {
   const reduced = useReducedMotionSafe();
   const [dismissed, setDismissed] = useState<string | null>(null);
@@ -117,7 +120,7 @@ export function RecommendationPanel({
                       selected={selectedModelId === rec.model_id}
                       compareMode={compareMode}
                       compareChecked={compareIds.includes(rec.model_id)}
-                      disabled={loading}
+                      disabled={loading || (rec.is_free && !freeAvailable)}
                       onPick={onPick}
                       {...(onCompareToggle ? { onCompareToggle } : {})}
                     />
