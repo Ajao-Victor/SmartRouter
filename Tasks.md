@@ -143,7 +143,7 @@
 **Animations:** as listed; whole page `stagger(0.08)`.
 **Acceptance:** Lighthouse mobile perf ≥ 80 with WebGL lazy; reduced-motion renders statically.
 
-### Task 11 — Chat list and New-chat screen  `todo`
+### Task 11 — Chat list and New-chat screen  `done` (2026-10-08; commits: d55c2d2 df82c00 81949a8 0c56312 59ccfad f463e25)
 **Files**
 - `hooks/useChats.ts` — `['chats']`, `createChat` mutation (proposed).
 - `components/chat/ChatList.tsx` — HoloCard rows: title (GlitchText on first appearance), task_type chip, `spent` PriceTag, `message_count`; `stagger`.
