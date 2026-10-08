@@ -7,6 +7,8 @@ import { defineConfig, devices } from '@playwright/test';
  */
 const port = Number(process.env.E2E_PORT ?? 3100);
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${String(port)}`;
+// `E2E_VIDEO=1` records every run at the demo-script resolution (1280×800, docs/demo-script.md).
+const record = process.env.E2E_VIDEO === '1';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -15,10 +17,11 @@ export default defineConfig({
   use: {
     baseURL,
     trace: 'retain-on-failure',
+    ...(record ? { video: { mode: 'on', size: { width: 1280, height: 800 } } } : {}),
   },
   projects: [
     { name: 'mobile', use: { ...devices['Pixel 7'] } },
-    { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
+    { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } } },
   ],
   webServer: {
     command: `pnpm dev -p ${String(port)}`,
