@@ -9,7 +9,8 @@ your budget, and you pay per use from your embedded Tempo wallet via MPP.
 pnpm install                       # from the repo root (pnpm workspace)
 cp apps/web/.env.example apps/web/.env.local
 cd apps/web
-NEXT_PUBLIC_MOCK=1 pnpm dev        # fully offline on MSW mocks of the proposed API
+pnpm dev                           # .env.example ships NEXT_PUBLIC_MOCK=1: fully offline on MSW mocks
+# Set NEXT_PUBLIC_MOCK=0 only once the Hono API in NEXT_PUBLIC_API_URL is actually running.
 ```
 
 Open http://localhost:3000. Dev-only galleries: `/dev/tokens`, `/dev/primitives`, `/dev/fx`.
