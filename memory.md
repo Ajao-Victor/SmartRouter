@@ -107,13 +107,12 @@
 
 ## Decisions log
 
+| Date | Decision | Why |
+|---|---|---|
 | 2026-10-09 | `.env.example` ships `NEXT_PUBLIC_MOCK=1`; `apiUnreachableHint()` names the API URL and the mock switch in dev | With `0` and no Hono API on 8787 every click failed with a refused connection and looked like dead routing |
 | 2026-10-09 | Landing buttons prefetch `/chat` and run navigation in `useTransition` with a pending state | Dev compiles `/chat` on first navigation (≈ 11 s); the buttons looked inert |
 | 2026-10-09 | Playwright `globalSetup` warms `/`, `/chat`, `/chat/[id]`, `/settings`, `/receipts/[id]`; test budget 120 s | Route compilation landed inside the test timeout and made cold runs flaky |
 | 2026-10-09 | Signer bookkeeping persisted and reconciled with `/api/sessions/current` | A reload mid-session made every paid run fail with "No allocation signer" |
-
-| Date | Decision | Why |
-|---|---|---|
 | 2026-10-08 | axe runs in unit tests (jsdom) with colour-contrast disabled | Contrast needs layout; it was validated by token choice in UI_UX_Brief §2 |
 | 2026-10-08 | WebGL lazy-chunk budget raised from design.md's 180 kB to 230 kB gz | three.js core alone is ≈165 kB gz; the chunk only loads on capable devices after first paint |
 | 2026-10-08 | Phase builds go to `.next-build` via `NEXT_DIST_DIR` | The user previews on `next dev`, which owns `.next` in Next 15 |
