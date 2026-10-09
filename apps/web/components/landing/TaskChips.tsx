@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useTransition } from 'react';
+
 import { useRouter } from 'next/navigation';
 
 import { motion } from 'motion/react';
@@ -27,6 +29,10 @@ export function TaskChips() {
   const router = useRouter();
   const burst = useParticleBurst();
   const reduced = useReducedMotionSafe();
+  const [navigating, startNavigation] = useTransition();
+  useEffect(() => {
+    router.prefetch('/chat');
+  }, [router]);
   return (
     <motion.div
       variants={withReduced(stagger({ each: 0.05, delay: 1.2 }), reduced)}
@@ -39,9 +45,12 @@ export function TaskChips() {
         <motion.div key={t} variants={withReduced(fadeUp, reduced)}>
           <Chip
             tone={t === 'research' ? 'teal' : 'accent'}
+            aria-busy={navigating}
             onClick={(e) => {
               burst(burstAt(e, '#7C5CFF', 36));
-              router.push(`/chat?category=${t}`);
+              startNavigation(() => {
+                router.push(`/chat?category=${t}`);
+              });
             }}
           >
             {LABEL[t]}
