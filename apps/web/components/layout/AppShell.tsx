@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 
 import { useQueryClient } from '@tanstack/react-query';
 
+import { apiUnreachableHint } from '@/lib/api/errors';
 import { micro } from '@/lib/money';
 import { openDeposit } from '@/lib/tempo/deposit';
 import { openSwapToUsdce } from '@/lib/tempo/swap';
@@ -138,9 +139,10 @@ export function AppShell({ children, title, right }: AppShellProps) {
             <Skeleton className="h-28 w-full" />
           </div>
         ) : me.isOffline ? (
-          <p role="alert" className="glass rounded-lg p-4 text-sm text-signal">
-            Could not reach SmartRouter. Check your connection and try again.
-          </p>
+          <div role="alert" className="glass space-y-2 rounded-lg p-4 text-sm">
+            <p className="text-signal">Could not reach SmartRouter.</p>
+            <p className="text-text-2">{apiUnreachableHint()}</p>
+          </div>
         ) : (
           children
         )}
