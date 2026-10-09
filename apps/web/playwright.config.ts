@@ -26,7 +26,7 @@ export default defineConfig({
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } } },
   ],
   webServer: {
-    command: `pnpm dev -p ${String(port)}`,
+    command: `pnpm exec next dev -p ${String(port)}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
