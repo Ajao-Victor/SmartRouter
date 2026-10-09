@@ -41,11 +41,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={client}>
       <PreferencesProvider>
         <RouterField />
-        <div className="relative z-content">
-          <MockProvider>{children}</MockProvider>
-        </div>
-        <WaitlistDialog />
-        <LiveRegion />
+        {/* Everything that can call the API sits inside MockProvider so no request escapes
+            before the MSW worker is active (LiveRegion reads model labels). */}
+        <MockProvider>
+          <div className="relative z-content">{children}</div>
+          <WaitlistDialog />
+          <LiveRegion />
+        </MockProvider>
         <GlowTrailLayer />
         <ParticleLayer />
         <Toaster />
