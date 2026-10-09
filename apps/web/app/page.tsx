@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useTransition } from 'react';
+
 import { useRouter } from 'next/navigation';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -15,6 +17,17 @@ import { Button } from '@/components/ui/Button';
 export default function HomePage() {
   const router = useRouter();
   const auth = useAuth();
+  // `/chat` is a heavy route (R3F, markdown): prefetch it and show a pending state while it loads
+  // so "Start a task" / "Open app" never look dead (dev compiles it on first navigation).
+  const [navigating, startNavigation] = useTransition();
+  useEffect(() => {
+    router.prefetch('/chat');
+  }, [router]);
+  const openApp = () => {
+    startNavigation(() => {
+      router.push('/chat');
+    });
+  };
   // Tempo passkey dialog → SIWE → cookie → app.
   const onSignIn = () => {
     auth.signIn.mutate(undefined, {
@@ -34,19 +47,13 @@ export default function HomePage() {
           <Button variant="ghost" size="sm" onClick={onSignIn} loading={auth.signIn.isPending}>
             Sign in
           </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => {
-              router.push('/chat');
-            }}
-          >
+          <Button size="sm" variant="secondary" onClick={openApp} loading={navigating}>
             Open app
           </Button>
         </div>
       </header>
       <main className="space-y-20 pb-24">
-        <Hero onSignIn={onSignIn} signingIn={auth.signIn.isPending} />
+        <Hero onSignIn={onSignIn} signingIn={auth.signIn.isPending} onStart={openApp} starting={navigating} />
         <TaskChips />
         <SavingProof />
         <ProofStrip />
