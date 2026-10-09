@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { isApiError } from '@/lib/api/client';
 import { api } from '@/lib/api/endpoints';
+import { apiUnreachableHint } from '@/lib/api/errors';
 import { queryKeys } from '@/lib/api/keys';
 import { getTempoAccounts } from '@/lib/tempo/accounts';
 import { signInWithEthereum } from '@/lib/tempo/siwe';
@@ -47,6 +48,7 @@ export function useAuth() {
       const cancelled = err instanceof Error && /cancel|abort/i.test(err.message);
       w.setError(cancelled ? null : err instanceof Error ? err.message : 'Sign-in failed');
       if (cancelled) toast.info('Sign-in cancelled');
+      else if (isApiError(err) && err.code === 'network') toast.error('Could not reach SmartRouter', apiUnreachableHint());
       else toast.error("Couldn't verify your signature. Try again.", isApiError(err) ? err.message : undefined);
     },
   });
