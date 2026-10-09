@@ -62,7 +62,7 @@ offline on MSW mocks.
 ```bash
 pnpm install
 cp apps/web/.env.example apps/web/.env.local
-cd apps/web && NEXT_PUBLIC_MOCK=1 pnpm dev      # http://localhost:3000
+cd apps/web && pnpm dev                         # http://localhost:3000 on MSW mocks (NEXT_PUBLIC_MOCK=1 in .env.example)
 ```
 
 Checks: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm guard:hosts`, `scripts/ci.sh`
