@@ -12,7 +12,7 @@ import { RecommendationPanel } from '@/components/recommend/RecommendationPanel'
 import { AllocationControls } from '@/components/wallet/AllocationControls';
 import { SpendPermissionCard } from '@/components/wallet/SpendPermissionCard';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }), useSearchParams: () => new URLSearchParams() }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }), useSearchParams: () => new URLSearchParams() }));
 vi.mock('@/lib/api/endpoints', () => ({ api: { models: { list: vi.fn().mockResolvedValue([]) }, auth: { nonce: vi.fn(), verify: vi.fn(), logout: vi.fn() } } }));
 
 async function serious(container: HTMLElement): Promise<string[]> {
