@@ -1,6 +1,5 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 
 import { motion } from 'motion/react';
 
@@ -18,10 +17,12 @@ export const PITCH =
 export interface HeroProps {
   onSignIn: () => void;
   signingIn?: boolean;
+  /** Navigate to the app (`/chat`); the page owns the transition so the button can show pending. */
+  onStart: () => void;
+  starting?: boolean;
 }
 
-export function Hero({ onSignIn, signingIn = false }: HeroProps) {
-  const router = useRouter();
+export function Hero({ onSignIn, signingIn = false, onStart, starting = false }: HeroProps) {
   const reduced = useReducedMotionSafe();
   const words = withReduced(revealItem, reduced);
   const rise = withReduced(fadeUp, reduced);
@@ -51,12 +52,7 @@ export function Hero({ onSignIn, signingIn = false }: HeroProps) {
           transition={{ delay: 1.1 }}
           className="flex flex-wrap items-center gap-3"
         >
-          <MagneticButton
-            size="lg"
-            onClick={() => {
-              router.push('/chat');
-            }}
-          >
+          <MagneticButton size="lg" onClick={onStart} loading={starting}>
             Start a task
           </MagneticButton>
           <Button variant="secondary" size="lg" onClick={onSignIn} loading={signingIn}>
