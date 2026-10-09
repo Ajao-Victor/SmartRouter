@@ -4,7 +4,7 @@
   "private": true,
   "description": "SmartRouter web app — pick the best AI for your budget, pay per use from your Tempo wallet.",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3300",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
