@@ -12,7 +12,9 @@ const record = process.env.E2E_VIDEO === '1';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 90_000,
+  // Routes are compiled once in global-setup; the budget still leaves room for a slow laptop.
+  globalSetup: './tests/e2e/global-setup.ts',
+  timeout: 120_000,
   retries: process.env.CI ? 1 : 0,
   use: {
     baseURL,
