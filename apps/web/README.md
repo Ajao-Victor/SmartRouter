@@ -13,7 +13,7 @@ pnpm dev                           # .env.example ships NEXT_PUBLIC_MOCK=1: full
 # Set NEXT_PUBLIC_MOCK=0 only once the Hono API in NEXT_PUBLIC_API_URL is actually running.
 ```
 
-Open http://localhost:3000. Dev-only galleries: `/dev/tokens`, `/dev/primitives`, `/dev/fx`.
+Open http://localhost:3300 (the dev script pins port 3300 so it never collides with other apps on 3000). Dev-only galleries: `/dev/tokens`, `/dev/primitives`, `/dev/fx`.
 
 ## Checks
 
