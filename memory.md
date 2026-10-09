@@ -107,6 +107,11 @@
 
 ## Decisions log
 
+| 2026-10-09 | `.env.example` ships `NEXT_PUBLIC_MOCK=1`; `apiUnreachableHint()` names the API URL and the mock switch in dev | With `0` and no Hono API on 8787 every click failed with a refused connection and looked like dead routing |
+| 2026-10-09 | Landing buttons prefetch `/chat` and run navigation in `useTransition` with a pending state | Dev compiles `/chat` on first navigation (≈ 11 s); the buttons looked inert |
+| 2026-10-09 | Playwright `globalSetup` warms `/`, `/chat`, `/chat/[id]`, `/settings`, `/receipts/[id]`; test budget 120 s | Route compilation landed inside the test timeout and made cold runs flaky |
+| 2026-10-09 | Signer bookkeeping persisted and reconciled with `/api/sessions/current` | A reload mid-session made every paid run fail with "No allocation signer" |
+
 | Date | Decision | Why |
 |---|---|---|
 | 2026-10-08 | axe runs in unit tests (jsdom) with colour-contrast disabled | Contrast needs layout; it was validated by token choice in UI_UX_Brief §2 |
@@ -186,7 +191,7 @@
 
 - Budget gz figures are estimated as raw/3; Lighthouse runs (design.md §5) still need a manual browser pass (not automated in Task 28).
 
-- `signerStore` is not persisted: a page reload mid-session drops the channel id, so paid runs fail with "No allocation signer" while the API still reports the session open and the wallet offers only Top up. Fix later = persist the public bookkeeping (IndexedDB like `uiStore`) and reconcile `cumulative` with the session's `highest_voucher` on hydrate; the key itself already survives in IndexedDB. On mocks a reload resets everything (consistent), so the demo simply must not reload mid-take.
+- `signerStore` persists its public bookkeeping to IndexedDB (`sr:signer`) and `useSession` reconciles it: same channel → cap = deposit, total = max(local, `highest_voucher`); session null/closed/other channel → reset. The key pair lives in its own IndexedDB record, never in the store.
 
 - `withSentryConfig` source-map upload is not wired (no auth token); client errors still report with the DSN.
 
@@ -242,6 +247,8 @@
 - `vitest.config.ts`: `passWithNoTests: true` so packages without tests don't fail `check`.
 
 ## Session log
+
+- **2026-10-09** — Post-task fixes: persisted + reconciled the signer store; diagnosed the "clicks go nowhere" local run (`.env.local` had `NEXT_PUBLIC_MOCK=0` with no API on 8787, plus cold `/chat` compile with no pending state) → mock default on, prefetch + pending buttons, honest offline copy, mock banner, LiveRegion inside MockProvider, Playwright warm-up. Verified: lint, typecheck, 150 tests (43 files), e2e 2/2 from a cold server.
 
 - **2026-10-08** — Executed **Task 29** (root README, manifest + icons, layout metadata, final statuses). No new packages. **All 29 tasks complete.** Remaining before submission: manual Lighthouse pass, real-take demo video, backend answers in `Backend_Gaps_Report.md`, then swap mocks for the live API (`NEXT_PUBLIC_MOCK=0`, Tempo SDK origins in CSP).
 
