@@ -3,6 +3,7 @@
  * (or any thrown value) to one UI action so hooks and components stay consistent.
  */
 import { ApiError, isApiError } from '@/lib/api/client';
+import { env } from '@/lib/env';
 
 export type UiErrorAction =
   | { kind: 'sign_in' }
@@ -59,6 +60,18 @@ export function describeAction(a: UiErrorAction): string {
     case 'toast':
       return a.title;
   }
+}
+
+/**
+ * Why the API is unreachable, for the offline alert/toast. In development with mocks off this
+ * names the configured URL and the `NEXT_PUBLIC_MOCK=1` escape hatch — the usual cause of a
+ * "nothing works" local run (no Hono API on that port). Production users just get the generic line.
+ */
+export function apiUnreachableHint(): string {
+  if (process.env.NODE_ENV === 'development' && !env.mock) {
+    return `No API answered at ${env.apiUrl}. Start the SmartRouter API there, or set NEXT_PUBLIC_MOCK=1 in apps/web/.env.local to run on mocks.`;
+  }
+  return 'Check your connection and try again.';
 }
 
 export { ApiError };
