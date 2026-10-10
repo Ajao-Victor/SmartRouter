@@ -1,70 +1,107 @@
 /**
- * `/run` streaming client (PDF: text streams over Server-Sent Events with a heartbeat every
- * 15 s). Uses fetch + ReadableStream (POST body + cookie), parses SSE frames, Zod-validates each
- * event (shapes are PROPOSED — Backend_Gaps_Report §2.2) and enforces a 45 s heartbeat watchdog.
+ * `POST /run` streaming client (PDF "Streaming answers"): Server-Sent Events read with fetch +
+ * `ReadableStream` (never `EventSource` — the request is a POST with a body). Events are
+ * `event:` + JSON `data:` lines separated by a blank line; lines starting with `:` are
+ * heartbeats (every 15 s) and are ignored for content but reset the watchdog.
+ *
+ * Paid quotes go through `paidFetch` (the mppx session manager: 402 handshake, vouchers,
+ * one deposit approval); free quotes use plain `fetch`.
  */
 import { z } from 'zod';
 
-import { ApiError } from '@/lib/api/client';
-import { api } from '@/lib/api/endpoints';
-import type { RunInput } from '@/lib/api/types';
+import { ApiError, apiUrl, errorFromFetchFailure, errorFromResponse, isApiError } from '@/lib/api/client';
+import { RUN_PATH } from '@/lib/api/endpoints';
+import { fileSchema, usdSchema, type RunInput } from '@/lib/api/types';
+import { micro } from '@/lib/money';
+import { paidFetch, toPaymentError } from '@/lib/tempo/session';
 
 export const HEARTBEAT_MS = 15_000;
-export const WATCHDOG_MS = 45_000;
+/** PDF: answers can take over a minute to start; heartbeats keep the connection open. */
+export const WATCHDOG_MS = 60_000;
 
-const meta = z.object({ request_id: z.string(), model_id: z.string(), quote_id: z.string().nullable(), session_id: z.string().nullable() });
-const token = z.object({ text: z.string() });
-const retry = z.object({ from_model_id: z.string(), to_model_id: z.string(), reason: z.string() });
-const file = z.object({ url: z.string().url(), mime: z.string() });
-const job = z.object({ job_id: z.string() });
-const done = z.object({
-  request_id: z.string(),
-  price: z.number().int(),
-  provider_cost: z.number().int().nullable(),
-  latency_ms: z.number().int().nullable(),
-  voucher_amount: z.number().int().nullable(),
+const meta = z.object({
+  requestId: z.string(),
+  modelId: z.string(),
+  label: z.string().default(''),
+  priceUsd: usdSchema.default(0),
+  free: z.boolean().default(false),
+  chatId: z.string().nullish(),
+  userMessageId: z.string().nullish(),
+  assistantMessageId: z.string().nullish(),
+  remainingUsd: usdSchema.nullish(),
 });
-const error = z.object({ code: z.string(), message: z.string(), can_rerun_free: z.boolean().default(false) });
+const delta = z.object({ text: z.string() });
+const fallback = z.object({ fromModelId: z.string(), toModelId: z.string(), label: z.string().default(''), reason: z.string().default('') });
+const done = z.object({
+  requestId: z.string(),
+  modelId: z.string().default(''),
+  text: z.string().nullish(),
+  files: z.array(fileSchema).default([]),
+  citations: z.array(z.unknown()).default([]),
+  chargedUsd: usdSchema.default(0),
+  latencyMs: z.number().nullish(),
+});
+const pending = z.object({ requestId: z.string(), pollUrl: z.string() });
+const error = z.object({
+  code: z.string().default('INTERNAL'),
+  message: z.string().default('The run failed'),
+  refunded: z.boolean().default(false),
+  refundedUsd: usdSchema.nullish(),
+  freeRerun: z.object({ available: z.boolean().default(false), modelId: z.string().nullish() }).nullish(),
+});
 
-export type SseMeta = z.infer<typeof meta>;
-export type SseRetry = z.infer<typeof retry>;
-export type SseFile = z.infer<typeof file>;
-export type SseDone = z.infer<typeof done>;
-export type SseError = z.infer<typeof error>;
+export type SseMeta = z.output<typeof meta>;
+export type SseFallback = z.output<typeof fallback>;
+export type SseDone = z.output<typeof done>;
+export type SsePending = z.output<typeof pending>;
+export type SseError = z.output<typeof error>;
 
 export interface RunHandlers {
   onMeta?: (m: SseMeta) => void;
-  onToken?: (text: string) => void;
+  onDelta?: (text: string) => void;
   onHeartbeat?: () => void;
-  onRetry?: (r: SseRetry) => void;
-  onFile?: (f: SseFile) => void;
-  onJob?: (jobId: string) => void;
+  onFallback?: (f: SseFallback) => void;
+  onPending?: (p: SsePending) => void;
   onDone?: (d: SseDone) => void;
   onError?: (e: SseError) => void;
 }
 
-export type RunOutcome = { kind: 'done'; data: SseDone } | { kind: 'error'; data: SseError } | { kind: 'aborted' };
+export type RunOutcome =
+  | { kind: 'done'; data: SseDone }
+  | { kind: 'pending'; data: SsePending }
+  | { kind: 'error'; data: SseError }
+  | { kind: 'aborted' };
 
 interface Frame {
   event: string;
   data: string;
+  /** Comment-only frame (`: heartbeat`). */
+  comment: boolean;
 }
 
 /** Parse complete SSE frames out of a buffer; returns remaining partial text. */
 export function parseFrames(buffer: string): { frames: Frame[]; rest: string } {
-  const parts = buffer.split(/\n\n/);
+  const normalised = buffer.replace(/\r\n/g, '\n');
+  const parts = normalised.split(/\n\n/);
   const rest = parts.pop() ?? '';
   const frames: Frame[] = [];
   for (const block of parts) {
     let event = 'message';
+    let comment = false;
     const data: string[] = [];
     for (const line of block.split('\n')) {
-      if (line.startsWith('event:')) event = line.slice(6).trim();
+      if (line.startsWith(':')) comment = true;
+      else if (line.startsWith('event:')) event = line.slice(6).trim();
       else if (line.startsWith('data:')) data.push(line.slice(5).trimStart());
     }
-    if (data.length > 0 || event !== 'message') frames.push({ event, data: data.join('\n') });
+    if (data.length > 0 || event !== 'message') frames.push({ event, data: data.join('\n'), comment: false });
+    else if (comment) frames.push({ event: 'heartbeat', data: '', comment: true });
   }
   return { frames, rest };
+}
+
+function errorEvent(code: string, message: string, freeRerun = true): SseError {
+  return { code, message, refunded: true, refundedUsd: null, freeRerun: { available: freeRerun, modelId: null } };
 }
 
 function dispatch(frame: Frame, h: RunHandlers): RunOutcome | null {
@@ -81,27 +118,25 @@ function dispatch(frame: Frame, h: RunHandlers): RunOutcome | null {
       if (p.success) h.onMeta?.(p.data);
       return null;
     }
-    case 'token': {
-      const p = token.safeParse(json());
-      if (p.success) h.onToken?.(p.data.text);
+    case 'delta': {
+      const p = delta.safeParse(json());
+      if (p.success) h.onDelta?.(p.data.text);
       return null;
     }
     case 'heartbeat':
       h.onHeartbeat?.();
       return null;
-    case 'retry': {
-      const p = retry.safeParse(json());
-      if (p.success) h.onRetry?.(p.data);
+    case 'fallback': {
+      const p = fallback.safeParse(json());
+      if (p.success) h.onFallback?.(p.data);
       return null;
     }
-    case 'file': {
-      const p = file.safeParse(json());
-      if (p.success) h.onFile?.(p.data);
-      return null;
-    }
-    case 'job': {
-      const p = job.safeParse(json());
-      if (p.success) h.onJob?.(p.data.job_id);
+    case 'pending': {
+      const p = pending.safeParse(json());
+      if (p.success) {
+        h.onPending?.(p.data);
+        return { kind: 'pending', data: p.data };
+      }
       return null;
     }
     case 'done': {
@@ -110,13 +145,13 @@ function dispatch(frame: Frame, h: RunHandlers): RunOutcome | null {
         h.onDone?.(p.data);
         return { kind: 'done', data: p.data };
       }
-      const e: SseError = { code: 'invalid_response', message: 'Malformed done event', can_rerun_free: false };
+      const e = errorEvent('INVALID_RESPONSE', 'Malformed done event');
       h.onError?.(e);
       return { kind: 'error', data: e };
     }
     case 'error': {
       const p = error.safeParse(json());
-      const e: SseError = p.success ? p.data : { code: 'unknown', message: 'Run failed', can_rerun_free: false };
+      const e: SseError = p.success ? p.data : errorEvent('INTERNAL', 'The run failed');
       h.onError?.(e);
       return { kind: 'error', data: e };
     }
@@ -125,11 +160,27 @@ function dispatch(frame: Frame, h: RunHandlers): RunOutcome | null {
   }
 }
 
+async function openRun(body: RunInput, free: boolean, signal: AbortSignal): Promise<Response> {
+  const init: RequestInit = {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    body: JSON.stringify(body),
+    signal,
+  };
+  try {
+    return free ? await fetch(apiUrl(RUN_PATH), init) : await paidFetch(apiUrl(RUN_PATH), init);
+  } catch (err) {
+    if (isApiError(err)) throw err;
+    throw toPaymentError(err) ?? errorFromFetchFailure(err);
+  }
+}
+
 /**
- * Start a run and stream events to `handlers`. Resolves with the outcome. Any event resets the
- * heartbeat watchdog; silence for 45 s (3 missed heartbeats) aborts with `timeout`.
+ * Start a run and stream events to `handlers`. Resolves with the outcome. Any event (including
+ * heartbeat comments) resets the watchdog; silence for 60 s aborts with `TIMEOUT`.
  */
-export async function runStream(body: RunInput, handlers: RunHandlers, signal?: AbortSignal): Promise<RunOutcome> {
+export async function runStream(body: RunInput, options: { free: boolean }, handlers: RunHandlers, signal?: AbortSignal): Promise<RunOutcome> {
   const controller = new AbortController();
   const onOuterAbort = () => {
     controller.abort();
@@ -147,14 +198,14 @@ export async function runStream(body: RunInput, handlers: RunHandlers, signal?: 
   };
 
   try {
-    const res = await api.run.start(body, controller.signal);
+    const res = await openRun(body, options.free, controller.signal);
+    if (!res.ok) throw await errorFromResponse(res);
     const reader = res.body?.getReader();
     if (!reader) {
-      const e: SseError = { code: 'invalid_response', message: 'No stream body', can_rerun_free: false };
+      const e = errorEvent('INVALID_RESPONSE', 'No stream body');
       handlers.onError?.(e);
       return { kind: 'error', data: e };
     }
-    // Aborting must unblock a pending read even when the body is not tied to the fetch signal.
     controller.signal.addEventListener('abort', () => {
       reader.cancel().catch(() => undefined);
     });
@@ -180,20 +231,22 @@ export async function runStream(body: RunInput, handlers: RunHandlers, signal?: 
       const outcome = dispatch(f, handlers);
       if (outcome) return outcome;
     }
-    const e: SseError = { code: 'stream_ended', message: 'The stream ended without a result', can_rerun_free: true };
+    const e = errorEvent('STREAM_ENDED', 'The stream ended without a result');
     handlers.onError?.(e);
     return { kind: 'error', data: e };
   } catch (err) {
     if (state.timedOut) {
-      const e: SseError = { code: 'timeout', message: 'No heartbeat from SmartRouter for 45 s', can_rerun_free: true };
+      const e = errorEvent('TIMEOUT', 'No heartbeat from SmartRouter for 60 s');
       handlers.onError?.(e);
       return { kind: 'error', data: e };
     }
-    if (controller.signal.aborted || (err instanceof ApiError && err.code === 'aborted')) return { kind: 'aborted' };
+    if (controller.signal.aborted || (err instanceof ApiError && err.code === 'ABORTED')) return { kind: 'aborted' };
     const e: SseError = {
-      code: err instanceof ApiError ? err.code : 'network',
+      code: err instanceof ApiError ? err.code : 'NETWORK',
       message: err instanceof Error ? err.message : 'Run failed',
-      can_rerun_free: true,
+      refunded: true,
+      refundedUsd: null,
+      freeRerun: { available: !(err instanceof ApiError && err.code === 'FREE_LIMIT_REACHED'), modelId: null },
     };
     handlers.onError?.(e);
     return { kind: 'error', data: e };
@@ -202,3 +255,5 @@ export async function runStream(body: RunInput, handlers: RunHandlers, signal?: 
     signal?.removeEventListener('abort', onOuterAbort);
   }
 }
+
+export const ZERO_USD = micro(0);
