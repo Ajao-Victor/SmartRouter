@@ -1,9 +1,10 @@
 /**
  * Money helpers.
  *
- * The API stores and returns money as **integer micro-USD** (PDF: "Money as integer micro-USD").
- * 1 USD = 1_000_000 micro. All arithmetic stays in integers; floats appear only at the
- * formatting boundary. Prices are rounded **up** to $0.0001 (PDF pricing rule).
+ * The live API speaks **USD decimals** (`priceUsd`, `depositUsd`, `chargedUsd` …). The app
+ * converts those at the API boundary into **integer micro-USD** (1 USD = 1_000_000 micro) so all
+ * arithmetic stays in integers; floats appear only at the formatting and serialisation boundary.
+ * Prices are rounded **up** to $0.0001 (PDF pricing rule).
  */
 
 /** Branded integer micro-USD. Create with `micro()` or `fromUsd()`. */
@@ -34,6 +35,25 @@ export function fromUsd(usd: number): MicroUsd {
 /** Convert micro-USD to a USD float. Use only for display or charts, never for logic. */
 export function toUsd(m: MicroUsd): number {
   return m / MICRO_PER_USD;
+}
+
+/**
+ * Serialise micro-USD for the API / mppx as a plain decimal string without float noise
+ * (`2_000_000` → "2", `900` → "0.0009").
+ */
+export function toUsdString(m: MicroUsd): string {
+  const negative = m < 0;
+  const abs = Math.abs(m);
+  const whole = Math.floor(abs / MICRO_PER_USD);
+  const frac = String(abs % MICRO_PER_USD).padStart(6, '0').replace(/0+$/, '');
+  return `${negative ? '-' : ''}${String(whole)}${frac ? `.${frac}` : ''}`;
+}
+
+/** Parse a USD value the API sent (number or decimal string) into micro-USD. */
+export function parseUsd(value: number | string): MicroUsd {
+  const n = typeof value === 'string' ? Number(value) : value;
+  if (!Number.isFinite(n)) throw new TypeError(`parseUsd(): expected a finite USD amount, got ${String(value)}`);
+  return fromUsd(n);
 }
 
 /** Round up to the next $0.0001 (PDF: "rounded up to $0.0001"). */
