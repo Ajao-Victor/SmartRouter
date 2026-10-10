@@ -1,26 +1,21 @@
 import type { ZodType, ZodTypeDef } from 'zod';
 
+import { API_ERROR_CODES, type ServerErrorCode } from '@/lib/api/types';
 import { env } from '@/lib/env';
 
 /**
- * Error codes the UI switches on (Technical_Requirements.md §5.4).
- * The API's own `code` wins when present; otherwise the HTTP status is mapped.
- * Exact status/body shapes are unconfirmed — Backend_Gaps_Report §2.5.
+ * Error codes the UI switches on. The PDF: "Every error before a stream starts has one JSON
+ * shape `{ code, message, details? }`. Map on `code`, not on the HTTP status or the message text."
+ * Server codes are listed in `types.ts`; the rest are client-side conditions.
  */
 export type ApiErrorCode =
-  | 'unauthorized'
-  | 'allocation_exceeded'
-  | 'quote_expired'
-  | 'rate_limited'
-  | 'free_quota_exhausted'
-  | 'session_closed'
-  | 'not_found'
-  | 'validation'
-  | 'server'
-  | 'network'
-  | 'invalid_response'
-  | 'aborted'
-  | 'unknown';
+  | ServerErrorCode
+  | 'NETWORK'
+  | 'ABORTED'
+  | 'INVALID_RESPONSE'
+  | 'PAYMENT_CANCELLED'
+  | 'SESSION_BUSY'
+  | 'UNKNOWN';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -29,13 +24,7 @@ export class ApiError extends Error {
   readonly retryAfter: number | undefined;
   readonly details: unknown;
 
-  constructor(args: {
-    status: number;
-    code: ApiErrorCode;
-    message: string;
-    retryAfter?: number | undefined;
-    details?: unknown;
-  }) {
+  constructor(args: { status: number; code: ApiErrorCode; message: string; retryAfter?: number | undefined; details?: unknown }) {
     super(args.message);
     this.name = 'ApiError';
     this.status = args.status;
@@ -45,39 +34,34 @@ export class ApiError extends Error {
   }
 }
 
-const KNOWN_CODES: ReadonlySet<string> = new Set<ApiErrorCode>([
-  'unauthorized',
-  'allocation_exceeded',
-  'quote_expired',
-  'rate_limited',
-  'free_quota_exhausted',
-  'session_closed',
-  'not_found',
-  'validation',
-  'server',
-]);
+const KNOWN_CODES: ReadonlySet<string> = new Set<string>(API_ERROR_CODES);
 
+/** Fallback only for responses that carry no `code` (proxies, platform errors). */
 function codeFromStatus(status: number): ApiErrorCode {
-  if (status === 401) return 'unauthorized';
-  if (status === 402) return 'allocation_exceeded';
-  if (status === 404) return 'not_found';
-  if (status === 409) return 'quote_expired';
-  if (status === 422 || status === 400) return 'validation';
-  if (status === 429) return 'rate_limited';
-  if (status >= 500) return 'server';
-  return 'unknown';
+  if (status === 401) return 'UNAUTHENTICATED';
+  if (status === 402) return 'PAYMENT_REQUIRED';
+  if (status === 403) return 'FORBIDDEN';
+  if (status === 404) return 'NOT_FOUND';
+  if (status === 409) return 'QUOTE_USED';
+  if (status === 410) return 'QUOTE_EXPIRED';
+  if (status === 400 || status === 422) return 'VALIDATION_FAILED';
+  if (status === 429) return 'RATE_LIMITED';
+  if (status === 503) return 'PROVIDER_UNAVAILABLE';
+  if (status >= 500) return 'INTERNAL';
+  return 'UNKNOWN';
 }
 
 interface ErrorBody {
   code?: string;
   message?: string;
   error?: string;
+  details?: unknown;
 }
 
 function parseErrorBody(text: string): ErrorBody {
   try {
     const parsed: unknown = JSON.parse(text);
-    if (parsed && typeof parsed === 'object') return parsed;
+    if (parsed && typeof parsed === 'object') return parsed as ErrorBody;
   } catch {
     /* non-JSON body */
   }
@@ -92,24 +76,38 @@ function parseRetryAfter(header: string | null): number | undefined {
   return Number.isFinite(at) ? Math.max(0, Math.round((at - Date.now()) / 1000)) : undefined;
 }
 
+/** Turn a non-OK response into an `ApiError` keyed by the body's `code`. */
+export async function errorFromResponse(response: Response): Promise<ApiError> {
+  const text = await response.text();
+  const body = parseErrorBody(text);
+  const code = body.code && KNOWN_CODES.has(body.code.toUpperCase()) ? (body.code.toUpperCase() as ApiErrorCode) : codeFromStatus(response.status);
+  return new ApiError({
+    status: response.status,
+    code,
+    message: body.message ?? body.error ?? `Request failed (${String(response.status)})`,
+    retryAfter: parseRetryAfter(response.headers.get('Retry-After')),
+    details: body.details ?? body,
+  });
+}
+
+/** Wrap a thrown fetch failure (offline, CORS, abort) as an `ApiError`. */
+export function errorFromFetchFailure(err: unknown): ApiError {
+  if (err instanceof DOMException && err.name === 'AbortError') {
+    return new ApiError({ status: 0, code: 'ABORTED', message: 'Request aborted' });
+  }
+  return new ApiError({ status: 0, code: 'NETWORK', message: 'Could not reach SmartRouter. Check your connection.', details: err });
+}
+
 export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
 export interface ApiRequestOptions<T> {
   method?: HttpMethod;
   /** JSON-serialisable body; sent as `application/json`. */
   body?: unknown;
-  /**
-   * Validates and types the response. Invalid payloads throw `ApiError('invalid_response')`.
-   * `Input = unknown` so `T` is inferred from the schema's *output* (branded micro-USD), not its input.
-   */
+  /** Validates and types the response. Invalid payloads throw `ApiError('INVALID_RESPONSE')`. */
   schema?: ZodType<T, ZodTypeDef, unknown>;
   signal?: AbortSignal;
   headers?: Record<string, string>;
-}
-
-/** Headers every request carries (security.md §5: cookie auth + CSRF marker). */
-export function baseHeaders(extra?: Record<string, string>): Record<string, string> {
-  return { 'X-Requested-With': 'smartrouter', Accept: 'application/json', ...extra };
 }
 
 export function apiUrl(path: string): string {
@@ -117,23 +115,20 @@ export function apiUrl(path: string): string {
 }
 
 /**
- * Fetch wrapper for the SmartRouter API.
- * - always `credentials: 'include'` (httpOnly session cookie)
- * - JSON in/out
- * - throws `ApiError` with a UI-mappable `code`
+ * The one API client (PDF "Data fetching"): plain `fetch` with `credentials: 'include'` so the
+ * `sr_session` cookie rides along, JSON in/out, errors mapped by `code`. The API is called
+ * directly — never through a Vercel rewrite — so the backend sees the real client IP.
  */
-export async function apiFetch<T = unknown>(
-  path: string,
-  options: ApiRequestOptions<T> = {},
-): Promise<T> {
+export async function apiFetch<T = unknown>(path: string, options: ApiRequestOptions<T> = {}): Promise<T> {
   const method = options.method ?? 'GET';
   const init: RequestInit = {
     method,
     credentials: 'include',
-    headers: baseHeaders({
+    headers: {
+      Accept: 'application/json',
       ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       ...options.headers,
-    }),
+    },
     ...(options.signal ? { signal: options.signal } : {}),
     ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
   };
@@ -142,108 +137,27 @@ export async function apiFetch<T = unknown>(
   try {
     response = await fetch(apiUrl(path), init);
   } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new ApiError({ status: 0, code: 'aborted', message: 'Request aborted' });
-    }
-    throw new ApiError({
-      status: 0,
-      code: 'network',
-      message: 'Could not reach SmartRouter. Check your connection.',
-      details: err,
-    });
+    throw errorFromFetchFailure(err);
   }
 
-  if (!response.ok) {
-    const text = await response.text();
-    const body = parseErrorBody(text);
-    const code =
-      body.code && KNOWN_CODES.has(body.code)
-        ? (body.code as ApiErrorCode)
-        : codeFromStatus(response.status);
-    throw new ApiError({
-      status: response.status,
-      code,
-      message: body.message ?? body.error ?? `Request failed (${String(response.status)})`,
-      retryAfter: parseRetryAfter(response.headers.get('Retry-After')),
-      details: body,
-    });
-  }
-
+  if (!response.ok) throw await errorFromResponse(response);
   if (response.status === 204) return undefined as T;
 
   let data: unknown;
   try {
     data = await response.json();
   } catch (err) {
-    throw new ApiError({
-      status: response.status,
-      code: 'invalid_response',
-      message: 'SmartRouter returned a non-JSON response.',
-      details: err,
-    });
+    throw new ApiError({ status: response.status, code: 'INVALID_RESPONSE', message: 'SmartRouter returned a non-JSON response.', details: err });
   }
 
   if (options.schema) {
     const parsed = options.schema.safeParse(data);
     if (!parsed.success) {
-      throw new ApiError({
-        status: response.status,
-        code: 'invalid_response',
-        message: 'SmartRouter returned an unexpected payload.',
-        details: parsed.error.issues,
-      });
+      throw new ApiError({ status: response.status, code: 'INVALID_RESPONSE', message: 'SmartRouter returned an unexpected payload.', details: parsed.error.issues });
     }
     return parsed.data;
   }
   return data as T;
-}
-
-/**
- * Open a streaming POST (used by `/run`, SSE over fetch — architecture.md §8).
- * Returns the raw `Response`; the SSE parser (Task 21) reads `response.body`.
- * Non-OK responses are mapped to `ApiError` exactly like `apiFetch`.
- */
-export async function apiStream(
-  path: string,
-  body: unknown,
-  signal?: AbortSignal,
-): Promise<Response> {
-  let response: Response;
-  try {
-    response = await fetch(apiUrl(path), {
-      method: 'POST',
-      credentials: 'include',
-      headers: baseHeaders({ 'Content-Type': 'application/json', Accept: 'text/event-stream' }),
-      body: JSON.stringify(body),
-      ...(signal ? { signal } : {}),
-    });
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new ApiError({ status: 0, code: 'aborted', message: 'Request aborted' });
-    }
-    throw new ApiError({
-      status: 0,
-      code: 'network',
-      message: 'Could not reach SmartRouter. Check your connection.',
-      details: err,
-    });
-  }
-  if (!response.ok) {
-    const text = await response.text();
-    const parsed = parseErrorBody(text);
-    const code =
-      parsed.code && KNOWN_CODES.has(parsed.code)
-        ? (parsed.code as ApiErrorCode)
-        : codeFromStatus(response.status);
-    throw new ApiError({
-      status: response.status,
-      code,
-      message: parsed.message ?? parsed.error ?? `Request failed (${String(response.status)})`,
-      retryAfter: parseRetryAfter(response.headers.get('Retry-After')),
-      details: parsed,
-    });
-  }
-  return response;
 }
 
 export function isApiError(err: unknown): err is ApiError {
