@@ -1,33 +1,36 @@
 import { create } from 'zustand';
 
-import type { UserSession } from '@/lib/api/types';
+import type { SessionSummary, SessionsCurrent } from '@/lib/api/types';
 import { clampMicro, micro, type MicroUsd } from '@/lib/money';
 
-export type AllocationStatus = 'none' | 'open' | 'used' | 'toppingUp' | 'closed';
+export type AllocationStatus = 'none' | 'open' | 'used' | 'toppingUp' | 'closing' | 'closed';
 
-/** Below this share of the deposit the HUD shows the "low" state (design.md §4.2). */
-export const LOW_ALLOCATION_PCT = 0.25;
+/** PDF low-balance alert: below ~10% of the deposit (or below the next quote's price). */
+export const LOW_ALLOCATION_PCT = 0.1;
 
 export interface AllocationState {
   channelId: string | null;
-  depositMicro: MicroUsd;
-  remainingMicro: MicroUsd;
-  /** Cumulative voucher total the server has seen (PDF `user_sessions.highest_voucher`). */
-  highestVoucherMicro: MicroUsd;
+  depositUsd: MicroUsd;
+  spentUsd: MicroUsd;
+  remainingUsd: MicroUsd;
+  requests: number;
+  /** The backend's suggested deposit (defaults to the user's allocation). */
+  suggestedDepositUsd: MicroUsd;
   status: AllocationStatus;
-  /** Last voucher applied — drives the HUD drain animation. */
-  lastVoucherMicro: MicroUsd;
+  /** Last charge applied — drives the header drain animation. */
+  lastChargeUsd: MicroUsd;
 }
 
 export interface AllocationActions {
-  /** Mirror the server session (PDF: wallet balances are never stored; sessions are). */
-  hydrateFromSession: (session: UserSession | null) => void;
-  /** Optimistically deduct a paid run's quoted price. */
-  applyVoucher: (priceMicro: MicroUsd) => void;
-  /** No result delivered → the voucher amount is not counted (PDF failure rule). */
-  restoreVoucher: (priceMicro: MicroUsd) => void;
+  /** Mirror `GET /sessions/current` (PDF: refresh it after each `done` event). */
+  hydrate: (current: SessionsCurrent | null) => void;
+  /** `meta.remainingUsd` on a paid run — the freshest number the server has. */
+  setRemaining: (remainingUsd: MicroUsd) => void;
+  /** Apply a `done.chargedUsd` optimistically until the session refetches. */
+  applyCharge: (chargedUsd: MicroUsd) => void;
   beginTopUp: () => void;
-  endTopUp: (session: UserSession | null) => void;
+  beginClose: () => void;
+  settle: () => void;
   reset: () => void;
 }
 
@@ -35,55 +38,50 @@ const zero = micro(0);
 
 const initialState: AllocationState = {
   channelId: null,
-  depositMicro: zero,
-  remainingMicro: zero,
-  highestVoucherMicro: zero,
+  depositUsd: zero,
+  spentUsd: zero,
+  remainingUsd: zero,
+  requests: 0,
+  suggestedDepositUsd: micro(2_000_000),
   status: 'none',
-  lastVoucherMicro: zero,
+  lastChargeUsd: zero,
 };
 
-function statusFor(session: UserSession, remaining: MicroUsd): AllocationStatus {
+function statusFor(session: SessionSummary): AllocationStatus {
   if (session.status === 'closed') return 'closed';
-  return remaining <= 0 ? 'used' : 'open';
-}
-
-function fromSession(session: UserSession): Omit<AllocationState, 'lastVoucherMicro'> {
-  const remaining = clampMicro(micro(session.deposit - session.highest_voucher), session.deposit);
-  return {
-    channelId: session.channel_id,
-    depositMicro: session.deposit,
-    remainingMicro: remaining,
-    highestVoucherMicro: session.highest_voucher,
-    status: statusFor(session, remaining),
-  };
+  return session.remainingUsd <= 0 ? 'used' : 'open';
 }
 
 export const useAllocationStore = create<AllocationState & AllocationActions>()((set) => ({
   ...initialState,
-  hydrateFromSession: (session) => {
-    if (!session) {
+  hydrate: (current) => {
+    if (!current) {
       set({ ...initialState });
       return;
     }
-    set((s) => ({ ...fromSession(session), lastVoucherMicro: s.lastVoucherMicro }));
+    const s = current.session;
+    set((prev) => ({
+      suggestedDepositUsd: current.suggestedDepositUsd,
+      channelId: s?.channelId ?? null,
+      depositUsd: s?.depositUsd ?? zero,
+      spentUsd: s?.spentUsd ?? zero,
+      remainingUsd: s?.remainingUsd ?? zero,
+      requests: s?.requests ?? 0,
+      status: s ? statusFor(s) : 'none',
+      lastChargeUsd: prev.lastChargeUsd,
+    }));
   },
-  applyVoucher: (priceMicro) => {
-    set((s) => {
-      const remaining = clampMicro(micro(s.remainingMicro - priceMicro), s.depositMicro);
-      return {
-        remainingMicro: remaining,
-        highestVoucherMicro: micro(s.highestVoucherMicro + priceMicro),
-        lastVoucherMicro: priceMicro,
-        status: s.status === 'closed' ? 'closed' : remaining <= 0 ? 'used' : 'open',
-      };
-    });
+  setRemaining: (remainingUsd) => {
+    set((s) => ({ remainingUsd, status: s.status === 'closed' ? 'closed' : remainingUsd <= 0 ? 'used' : s.status === 'none' ? 'open' : s.status }));
   },
-  restoreVoucher: (priceMicro) => {
+  applyCharge: (chargedUsd) => {
     set((s) => {
-      const remaining = clampMicro(micro(s.remainingMicro + priceMicro), s.depositMicro);
+      const remaining = clampMicro(micro(s.remainingUsd - chargedUsd), s.depositUsd);
       return {
-        remainingMicro: remaining,
-        highestVoucherMicro: clampMicro(micro(s.highestVoucherMicro - priceMicro), s.depositMicro),
+        remainingUsd: remaining,
+        spentUsd: micro(s.spentUsd + chargedUsd),
+        requests: s.requests + 1,
+        lastChargeUsd: chargedUsd,
         status: s.status === 'closed' ? 'closed' : remaining <= 0 ? 'used' : 'open',
       };
     });
@@ -91,12 +89,11 @@ export const useAllocationStore = create<AllocationState & AllocationActions>()(
   beginTopUp: () => {
     set({ status: 'toppingUp' });
   },
-  endTopUp: (session) => {
-    if (!session) {
-      set((s) => ({ status: s.remainingMicro <= 0 ? 'used' : 'open' }));
-      return;
-    }
-    set((s) => ({ ...fromSession(session), lastVoucherMicro: s.lastVoucherMicro }));
+  beginClose: () => {
+    set({ status: 'closing' });
+  },
+  settle: () => {
+    set((s) => ({ status: s.channelId ? (s.remainingUsd <= 0 ? 'used' : 'open') : 'none' }));
   },
   reset: () => {
     set({ ...initialState });
@@ -105,16 +102,14 @@ export const useAllocationStore = create<AllocationState & AllocationActions>()(
 
 /* ------------------------------- selectors -------------------------------- */
 
-export const selectRemainingPct = (s: AllocationState): number =>
-  s.depositMicro > 0 ? s.remainingMicro / s.depositMicro : 0;
+export const selectRemainingPct = (s: AllocationState): number => (s.depositUsd > 0 ? s.remainingUsd / s.depositUsd : 0);
 
-export const selectIsLow = (s: AllocationState): boolean =>
-  s.status === 'open' && selectRemainingPct(s) < LOW_ALLOCATION_PCT;
+export const selectIsLow = (s: AllocationState): boolean => s.status === 'open' && selectRemainingPct(s) < LOW_ALLOCATION_PCT;
 
 export const selectIsUsed = (s: AllocationState): boolean => s.status === 'used';
 
-/** PDF: quote ≤ remaining allocation → continue. */
+/** The next run would pass the deposit (PDF: show Top up / Continue free before contacting the server). */
 export const selectCanAfford =
-  (priceMicro: MicroUsd) =>
+  (priceUsd: MicroUsd) =>
   (s: AllocationState): boolean =>
-    s.status === 'open' && priceMicro <= s.remainingMicro;
+    s.status === 'none' ? priceUsd <= s.suggestedDepositUsd : s.status !== 'closed' && priceUsd <= s.remainingUsd;
