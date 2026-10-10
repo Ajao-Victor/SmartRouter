@@ -1,10 +1,12 @@
 import { z } from 'zod';
 
 /**
- * Public runtime config, validated once at import time.
+ * Public runtime config (SmartRouter Frontend Architecture, "Vercel environment variables").
  *
- * Only `NEXT_PUBLIC_*` keys exist here — addresses, URLs, DSNs and flags.
- * Provider, treasury and hot-wallet keys never reach the browser (security.md §8).
+ * The browser needs exactly four public values to reach the live backend and the user's wallet:
+ * the API base URL, the Tempo network, its chain id and a public RPC URL. Everything else here
+ * is optional tooling (Sentry, feature flags, the offline mock switch for development and tests).
+ * Provider keys, the hot wallet and the operator key never exist in this bundle.
  *
  * Each key is referenced literally so Next.js can inline it into the client bundle.
  */
@@ -13,39 +15,40 @@ const booleanFlag = z
   .optional()
   .transform((v) => v === '1' || v === 'true');
 
-const hexAddress = z
-  .string()
-  .regex(/^0x[0-9a-fA-F]{40}$/, 'expected a 0x-prefixed 20-byte hex address');
+/** PDF: Tempo mainnet = chain 4217 (`tempo`), Moderato testnet = chain 42431 (`moderato`). */
+export const CHAIN_IDS = { tempo: 4217, moderato: 42431 } as const;
+export const DEFAULT_RPC_URLS = {
+  tempo: 'https://rpc.tempo.xyz',
+  moderato: 'https://rpc.moderato.tempo.xyz',
+} as const;
 
-const schema = z.object({
-  apiUrl: z.string().url().transform((u) => u.replace(/\/+$/, '')),
-  network: z.enum(['testnet', 'mainnet']),
-  smartrouterPayee: hexAddress,
-  usdceAddress: hexAddress,
-  tempoOrigins: z
-    .string()
-    .optional()
-    .transform((s) => (s ?? '').split(',').map((o) => o.trim()).filter(Boolean)),
-  objectStorageHost: z.string().optional().transform((s) => s ?? ''),
-  sentryDsn: z.string().optional().transform((s) => s ?? ''),
-  /** Display-only fee hint; the API's quote is authoritative. PDF: 10% → 1000 bps. */
-  feeBps: z.coerce.number().int().min(0).max(10_000).default(1000),
-  flagCompare: booleanFlag,
-  flagMusic: booleanFlag,
-  mock: booleanFlag,
-});
+const schema = z
+  .object({
+    apiUrl: z.string().url().transform((u) => u.replace(/\/+$/, '')),
+    network: z.enum(['tempo', 'moderato']),
+    chainId: z.coerce.number().int().positive().optional(),
+    rpcUrl: z.string().url().optional(),
+    objectStorageHost: z.string().optional().transform((s) => s ?? ''),
+    sentryDsn: z.string().optional().transform((s) => s ?? ''),
+    flagCompare: booleanFlag,
+    flagMusic: booleanFlag,
+    mock: booleanFlag,
+  })
+  .transform((e) => ({
+    ...e,
+    chainId: e.chainId ?? CHAIN_IDS[e.network],
+    rpcUrl: e.rpcUrl ?? DEFAULT_RPC_URLS[e.network],
+  }));
 
 export type Env = z.output<typeof schema>;
 
 const raw = {
   apiUrl: process.env.NEXT_PUBLIC_API_URL,
   network: process.env.NEXT_PUBLIC_TEMPO_NETWORK,
-  smartrouterPayee: process.env.NEXT_PUBLIC_SMARTROUTER_PAYEE,
-  usdceAddress: process.env.NEXT_PUBLIC_USDCE_ADDRESS,
-  tempoOrigins: process.env.NEXT_PUBLIC_TEMPO_ORIGINS,
+  chainId: process.env.NEXT_PUBLIC_CHAIN_ID,
+  rpcUrl: process.env.NEXT_PUBLIC_RPC_URL,
   objectStorageHost: process.env.NEXT_PUBLIC_OBJECT_STORAGE_HOST,
   sentryDsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
-  feeBps: process.env.NEXT_PUBLIC_FEE_BPS,
   flagCompare: process.env.NEXT_PUBLIC_FLAG_COMPARE ?? '1',
   flagMusic: process.env.NEXT_PUBLIC_FLAG_MUSIC ?? '1',
   mock: process.env.NEXT_PUBLIC_MOCK ?? '0',
@@ -68,4 +71,5 @@ function camelToScreaming(key: string): string {
 
 export const env: Env = parseEnv(raw);
 
-export const isTestnet = env.network === 'testnet';
+/** Moderato is the staging/testnet network: real on-chain payments with faucet pathUSD, mock model text. */
+export const isTestnet = env.network === 'moderato';
