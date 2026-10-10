@@ -1,4 +1,4 @@
-import type { SliderPreset, TaskType } from '@/lib/api/types';
+import type { TaskType } from '@/lib/api/types';
 
 /**
  * Single source of TanStack Query keys (rules.md §4.2).
@@ -6,23 +6,14 @@ import type { SliderPreset, TaskType } from '@/lib/api/types';
  */
 export const queryKeys = {
   me: () => ['me'] as const,
-  wallet: {
-    balance: () => ['wallet', 'balance'] as const,
-  },
   session: {
     current: () => ['session', 'current'] as const,
   },
-  models: (task?: TaskType) => (task ? (['models', task] as const) : (['models'] as const)),
+  catalog: (task?: TaskType) => (task ? (['catalog', task] as const) : (['catalog'] as const)),
   chats: () => ['chats'] as const,
   chat: (chatId: string) => ['chat', chatId] as const,
-  /** Quote cache is GC'd after 5 minutes (PDF validity). */
-  quote: (chatId: string, promptHash: string, modelId: string | null, slider: SliderPreset) =>
-    ['quote', chatId, promptHash, modelId ?? 'auto', slider] as const,
-  job: (jobId: string) => ['job', jobId] as const,
   request: (requestId: string) => ['request', requestId] as const,
-  free: {
-    usage: () => ['free', 'usage'] as const,
-  },
+  requests: () => ['requests'] as const,
 } as const;
 
 /** Quote validity window in ms (PDF: 5 minutes). */
