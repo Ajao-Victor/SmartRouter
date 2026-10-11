@@ -4,86 +4,58 @@ import { useCallback, useRef, useState } from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
 
-import { ApiError } from '@/lib/api/client';
+import { ApiError, isApiError } from '@/lib/api/client';
+import { api } from '@/lib/api/endpoints';
 import { queryKeys } from '@/lib/api/keys';
-import { runStream, type RunOutcome } from '@/lib/api/sse';
-import { FREE_MODEL_ID_DEFAULT, type QuoteResponse, type Recommendation, type Voucher } from '@/lib/api/types';
+import { runStream, type RunOutcome, type SseError } from '@/lib/api/sse';
+import { FREE_MODEL_ID, freeFallbackSchema, type FreeFallback, type Quote } from '@/lib/api/types';
 import { micro, type MicroUsd } from '@/lib/money';
-import { getSessionClient } from '@/lib/tempo/session';
+import { toPaymentError } from '@/lib/tempo/session';
+import { getCurrentWallet } from '@/lib/tempo/wallet';
 
 import { optimisticMessage, useChatCache } from '@/hooks/useChat';
 import { isQuoteExpired } from '@/hooks/useQuote';
 import { selectCanAfford, useAllocationStore } from '@/stores/allocationStore';
 import { useComposerStore } from '@/stores/composerStore';
-import { useSignerStore, VoucherCapError } from '@/stores/signerStore';
 import { useStreamStore } from '@/stores/streamStore';
 import { toast } from '@/stores/toastStore';
-
+import { useWalletStore } from '@/stores/walletStore';
 
 export interface RunRequest {
   prompt: string;
-  /** Current quote response (recommendations + quote). Null only for `forceFree`. */
-  quote: QuoteResponse | null;
-  /** Chosen model; null = Auto (top paid pick). */
-  modelId: string | null;
+  /** Fresh quote for the chosen model (price on the Send button). */
+  quote: Quote;
+  label?: string | null;
   autoFreeFallback: boolean;
-  freeAvailable: boolean;
-  /** "Continue free" / "Rerun on free model". */
-  forceFree?: boolean;
-  /** Current message count (for optimistic seq). */
-  seq: number;
 }
 
-export interface CompareRequest {
-  prompt: string;
-  quote: QuoteResponse;
-  leftModelId: string;
-  rightModelId: string;
-  seq: number;
-}
-
-export type RunStart = 'started' | 'needs_top_up' | 'needs_requote' | 'free_exhausted' | 'no_allocation';
+export type RunStart = 'started' | 'needs_top_up' | 'needs_requote' | 'free_exhausted' | 'cancelled' | 'busy' | 'ignored';
 
 export interface NeedsTopUp {
-  priceMicro: MicroUsd;
+  priceUsd: MicroUsd;
   prompt: string;
+  freeFallback: FreeFallback;
 }
 
 export interface ComparePair {
+  compareGroup: string;
   userMessageId: string;
   leftMessageId: string;
   rightMessageId: string;
   leftModelId: string;
   rightModelId: string;
+  prompt: string;
 }
 
-const FREE_REC: Recommendation = {
-  model_id: FREE_MODEL_ID_DEFAULT,
-  label: 'Free · Llama 3.1 8B',
-  provider: 'Cloudflare Workers AI',
-  price: micro(0),
-  speed_label: 'fast',
-  reason: '',
-  score: 0,
-  quality: 0,
-  is_free: true,
-  is_best_quality: false,
-  searches_web: false,
-  quote_id: null,
-};
-
-function quoteIdFor(rec: Recommendation, quote: QuoteResponse | null): string | null {
-  if (rec.is_free) return null;
-  if (!quote) return null;
-  const id = rec.quote_id ?? (quote.quote.model_id === rec.model_id ? quote.quote.id : null);
-  if (!id || isQuoteExpired(quote.quote.expires_at)) return null;
-  return id;
+function compareGroupId(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `cg_${String(Date.now())}_${Math.random().toString(36).slice(2)}`;
 }
 
 /**
- * PDF request lifecycle steps 6–11 in the browser:
- * allocation check → (sign cumulative voucher) → `/run` SSE → stream store → record → feedback.
- * Failure rules: no result → voucher not counted (restore + rollback); error → rerun on free.
+ * PDF "A normal turn" + "Paying for runs" in the browser: quote → affordability check
+ * (Top up / Continue free before contacting the server) → one-time payment prep → `POST /run`
+ * (free: plain fetch; paid: the mppx manager with the voucher) → SSE events into the stream
+ * store → `done`: record the charge and refresh the balance. Failed answers are never charged.
  */
 export function useRun(chatId: string) {
   const qc = useQueryClient();
@@ -98,46 +70,54 @@ export function useRun(chatId: string) {
     abortRef.current?.abort();
   }, []);
 
-  /** Reserve + sign a voucher for a paid option. Returns null when the cap is hit. */
-  const reserveVoucher = useCallback(async (price: MicroUsd): Promise<{ voucher: Voucher } | 'cap' | 'no_signer'> => {
-    const signer = useSignerStore.getState();
-    if (!signer.channelId) return 'no_signer';
+  const refresh = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: queryKeys.session.current() });
+    void qc.invalidateQueries({ queryKey: queryKeys.chats() });
+    void qc.invalidateQueries({ queryKey: queryKeys.requests() });
+  }, [qc]);
+
+  /** Authorize the access key and configure the manager once (one passkey prompt, first paid run). */
+  const preparePayments = useCallback(async (): Promise<void> => {
+    const wallet = getCurrentWallet();
+    if (!wallet) throw new ApiError({ status: 0, code: 'UNAUTHENTICATED', message: 'Sign in with your wallet to run paid models.' });
+    if (useWalletStore.getState().paymentsReady) return;
     try {
-      const cumulative = signer.advance(price);
-      const voucher = await getSessionClient().signVoucher({ channelId: signer.channelId, cumulativeMicro: cumulative });
-      return { voucher };
+      await wallet.preparePayments(useAllocationStore.getState().suggestedDepositUsd);
+      useWalletStore.getState().setPaymentsReady(true);
     } catch (err) {
-      if (err instanceof VoucherCapError) return 'cap';
-      throw err;
+      throw toPaymentError(err) ?? err;
     }
   }, []);
 
   /** Stream one assistant message and apply every PDF record/failure rule. */
   const executeStream = useCallback(
-    async (args: { messageId: string; rec: Recommendation; quoteId: string | null; prompt: string; voucher?: Voucher; price: MicroUsd; isFree: boolean; reserved: boolean }): Promise<RunOutcome> => {
-      const { messageId, rec, quoteId, prompt, voucher, price, isFree, reserved } = args;
+    async (args: { messageId: string; userMessageId: string; quote: Quote; prompt: string; compareGroup?: string }): Promise<RunOutcome> => {
+      const { messageId, userMessageId, quote, prompt, compareGroup } = args;
       const controller = new AbortController();
       abortRef.current = controller;
       const outcome = await runStream(
-        { quote_id: quoteId, chat_id: chatId, model_id: rec.model_id, prompt, ...(voucher ? { voucher } : {}) },
+        { quoteId: quote.quoteId, prompt, ...(compareGroup ? { compareGroup } : {}) },
+        { free: quote.free },
         {
           onMeta: (m) => {
-            useStreamStore.getState().setMeta(messageId, { requestId: m.request_id, modelId: m.model_id });
+            useStreamStore.getState().setMeta(messageId, { requestId: m.requestId, modelId: m.modelId, label: m.label, priceUsd: m.priceUsd, free: m.free, userMessageId: m.userMessageId ?? null, assistantMessageId: m.assistantMessageId ?? null });
+            if (m.remainingUsd !== null && m.remainingUsd !== undefined) useAllocationStore.getState().setRemaining(m.remainingUsd);
+            cache.update(messageId, { requestId: m.requestId, modelId: m.modelId });
+            if (m.userMessageId) cache.update(userMessageId, { id: m.userMessageId });
           },
-          onToken: (text) => {
-            useStreamStore.getState().appendTokens(messageId, [text]);
+          onDelta: (text) => {
+            useStreamStore.getState().append(messageId, text);
           },
           onHeartbeat: () => {
             useStreamStore.getState().heartbeat(messageId);
           },
-          onRetry: (r) => {
-            useStreamStore.getState().retry(messageId, { fromModelId: r.from_model_id, toModelId: r.to_model_id, reason: r.reason });
+          onFallback: (f) => {
+            useStreamStore.getState().fallback(messageId, f);
+            cache.update(messageId, { modelId: f.toModelId });
           },
-          onFile: (f) => {
-            useStreamStore.getState().file(messageId, f);
-          },
-          onJob: (jobId) => {
-            useStreamStore.getState().job(messageId, jobId);
+          onPending: (p) => {
+            useStreamStore.getState().pending(messageId, { requestId: p.requestId, pollUrl: p.pollUrl });
+            cache.update(messageId, { requestId: p.requestId, status: 'pending' });
           },
         },
         controller.signal,
@@ -145,176 +125,193 @@ export function useRun(chatId: string) {
       abortRef.current = null;
 
       if (outcome.kind === 'done') {
+        const d = outcome.data;
+        useStreamStore.getState().done(messageId, { chargedUsd: d.chargedUsd, latencyMs: d.latencyMs ?? null, requestId: d.requestId, files: d.files, citations: d.citations, text: d.text });
+        if (!quote.free) useAllocationStore.getState().applyCharge(d.chargedUsd);
         const entry = useStreamStore.getState().byMessageId[messageId];
-        useStreamStore.getState().done(messageId, { priceMicro: outcome.data.price, latencyMs: outcome.data.latency_ms, requestId: outcome.data.request_id });
-        if (!isFree) useAllocationStore.getState().applyVoucher(micro(outcome.data.price));
-        cache.update(messageId, {
-          content: entry?.tokens.join('') ?? '',
-          status: 'done',
-          request_id: outcome.data.request_id,
-          model_id: entry?.modelId ?? rec.model_id,
-          result_ref: entry?.file?.url ?? null,
-        });
-        void qc.invalidateQueries({ queryKey: queryKeys.session.current() });
-        void qc.invalidateQueries({ queryKey: queryKeys.chats() });
-        if (isFree) void qc.invalidateQueries({ queryKey: queryKeys.free.usage() });
+        cache.update(messageId, { text: d.text ?? entry?.text ?? '', status: 'done', requestId: d.requestId, modelId: d.modelId || entry?.modelId || quote.modelId, chargedUsd: d.chargedUsd, files: d.files, citations: d.citations });
+        refresh();
         return outcome;
       }
+      if (outcome.kind === 'pending') return outcome;
 
-      // No result delivered → the voucher amount is not counted (PDF failure rule).
-      if (reserved) useSignerStore.getState().rollback(price);
       if (outcome.kind === 'aborted') {
-        useStreamStore.getState().fail(messageId, { code: 'aborted', message: 'Cancelled', canRerunFree: true });
+        useStreamStore.getState().fail(messageId, { code: 'ABORTED', message: 'Stopped. You were not charged for an unfinished answer.', refunded: true, refundedUsd: null, canRerunFree: true });
       } else {
-        useStreamStore.getState().fail(messageId, { code: outcome.data.code, message: outcome.data.message, canRerunFree: outcome.data.can_rerun_free || !isFree });
-        if (outcome.data.code === 'rate_limited') setCooldownKey((k) => k + 1);
+        const e: SseError = outcome.data;
+        useStreamStore.getState().fail(messageId, { code: e.code, message: e.message, refunded: e.refunded, refundedUsd: e.refundedUsd ?? null, canRerunFree: e.freeRerun?.available ?? !quote.free });
+        if (e.code === 'RATE_LIMITED') setCooldownKey((k) => k + 1);
       }
       cache.update(messageId, { status: 'error' });
+      refresh();
       return outcome;
     },
-    [cache, chatId, qc],
+    [cache, refresh],
+  );
+
+  /** Shared pre-flight: handles every error thrown before a stream starts. */
+  const handlePreflightError = useCallback(
+    (err: unknown, prompt: string, priceUsd: MicroUsd, cleanup: () => void): RunStart => {
+      cleanup();
+      const e = isApiError(err) ? err : toPaymentError(err);
+      if (!e) {
+        toast.error('Something went wrong, try again', err instanceof Error ? err.message : undefined);
+        return 'cancelled';
+      }
+      switch (e.code) {
+        case 'ALLOCATION_EXHAUSTED':
+        case 'PAYMENT_REQUIRED': {
+          const parsed = freeFallbackSchema.safeParse((e.details as { freeFallback?: unknown } | undefined)?.freeFallback ?? {});
+          setNeedsTopUp({ priceUsd, prompt, freeFallback: parsed.success ? parsed.data : { available: true, remaining: null, modelId: FREE_MODEL_ID } });
+          return 'needs_top_up';
+        }
+        case 'QUOTE_EXPIRED':
+        case 'VALIDATION_FAILED':
+          return 'needs_requote';
+        case 'QUOTE_USED':
+          return 'ignored';
+        case 'RATE_LIMITED':
+          setCooldownKey((k) => k + 1);
+          toast.warn(`Too many requests — try again in ${String(Math.max(1, Math.round(e.retryAfter ?? 10)))} s`);
+          return 'busy';
+        case 'SESSION_BUSY':
+          toast.warn('A payment is already in progress', 'Wait for the current answer to start streaming.');
+          return 'busy';
+        case 'FREE_LIMIT_REACHED':
+          toast.warn('Free messages reset at 00:00 UTC', 'Pick a paid model to keep going.');
+          return 'free_exhausted';
+        case 'PAYMENT_CANCELLED':
+          toast.info('Payment cancelled', 'Nothing was charged. Your prompt is still in the box.');
+          return 'cancelled';
+        case 'UNAUTHENTICATED':
+          toast.warn('Sign in to continue');
+          return 'cancelled';
+        case 'FORBIDDEN':
+          toast.error('This payment session belongs to another wallet', 'Sign out and back in with the paying wallet.');
+          return 'cancelled';
+        case 'PROVIDER_UNAVAILABLE':
+          toast.warn('No model is available for this task right now', 'Try another model or the free one.');
+          return 'cancelled';
+        default:
+          toast.error(e.message);
+          return 'cancelled';
+      }
+    },
+    [],
   );
 
   const run = useCallback(
     async (req: RunRequest): Promise<RunStart> => {
-      const recs = req.quote?.recommendations ?? [];
-      const freeRec = recs.find((r) => r.is_free) ?? FREE_REC;
-      const rec: Recommendation | null = req.forceFree
-        ? freeRec
-        : req.modelId
-          ? (recs.find((r) => r.model_id === req.modelId) ?? null)
-          : (recs.find((r) => !r.is_free) ?? recs[0] ?? null);
-      if (!rec) return 'needs_requote';
-      const isFree = rec.is_free;
-      if (isFree && !req.freeAvailable) return 'free_exhausted';
+      const { quote, prompt } = req;
+      if (isQuoteExpired(quote.expiresAt)) return 'needs_requote';
+      const price = quote.free ? micro(0) : quote.priceUsd;
 
-      let quoteId: string | null = null;
-      let price = micro(0);
-      if (!isFree) {
-        quoteId = quoteIdFor(rec, req.quote);
-        if (!quoteId) return 'needs_requote';
-        price = rec.price;
+      if (!quote.free) {
         const alloc = useAllocationStore.getState();
-        if (alloc.status === 'none' || alloc.status === 'closed') return 'no_allocation';
-        if (!selectCanAfford(price)(alloc)) {
-          if (req.autoFreeFallback && req.freeAvailable) {
+        if (alloc.status === 'closed' || !selectCanAfford(price)(alloc)) {
+          if (req.autoFreeFallback) {
             toast.info('Allocation used — continuing free');
-            return run({ ...req, forceFree: true });
+            return runFree(prompt);
           }
-          setNeedsTopUp({ priceMicro: price, prompt: req.prompt });
+          setNeedsTopUp({ priceUsd: price, prompt, freeFallback: { available: true, remaining: null, modelId: FREE_MODEL_ID } });
           return 'needs_top_up';
         }
       }
 
-      const userMsg = optimisticMessage(chatId, req.seq, { role: 'user', content: req.prompt, status: 'done' });
-      const asstMsg = optimisticMessage(chatId, req.seq + 1, { role: 'assistant', content: '', status: 'streaming', model_id: rec.model_id });
+      setRunning(true);
+      try {
+        if (!quote.free) await preparePayments();
+      } catch (err) {
+        setRunning(false);
+        return handlePreflightError(err, prompt, price, () => undefined);
+      }
+
+      const userMsg = optimisticMessage({ role: 'user', text: prompt });
+      const asstMsg = optimisticMessage({ role: 'assistant', text: '', status: 'streaming', modelId: quote.modelId });
       cache.append(userMsg);
       cache.append(asstMsg);
       useComposerStore.getState().setDraft('');
-      useStreamStore.getState().start(asstMsg.id, { modelId: rec.model_id });
+      useStreamStore.getState().start(asstMsg.id, { modelId: quote.modelId, label: req.label ?? quote.label, free: quote.free });
       setNeedsTopUp(null);
-      setRunning(true);
 
-      let voucher: Voucher | undefined;
-      let reserved = false;
-      if (!isFree) {
-        const res = await reserveVoucher(price);
-        if (res === 'cap' || res === 'no_signer') {
-          setRunning(false);
-          useStreamStore.getState().fail(asstMsg.id, { code: 'voucher', message: res === 'cap' ? 'Allocation used — Top up' : 'No allocation signer', canRerunFree: true });
-          cache.update(asstMsg.id, { status: 'error' });
-          if (res === 'cap') setNeedsTopUp({ priceMicro: price, prompt: req.prompt });
-          return res === 'cap' ? 'needs_top_up' : 'no_allocation';
-        }
-        voucher = res.voucher;
-        reserved = true;
-      }
-
-      await executeStream({ messageId: asstMsg.id, rec, quoteId, prompt: req.prompt, ...(voucher ? { voucher } : {}), price, isFree, reserved });
+      const outcome = await executeStream({ messageId: asstMsg.id, userMessageId: userMsg.id, quote, prompt });
       setRunning(false);
+      if (outcome.kind === 'error' && ['ALLOCATION_EXHAUSTED', 'PAYMENT_REQUIRED', 'QUOTE_EXPIRED', 'QUOTE_USED', 'VALIDATION_FAILED', 'RATE_LIMITED', 'SESSION_BUSY', 'FREE_LIMIT_REACHED', 'PAYMENT_CANCELLED', 'UNAUTHENTICATED', 'FORBIDDEN', 'PROVIDER_UNAVAILABLE'].includes(outcome.data.code)) {
+        // Pre-stream failure surfaced through the stream path: undo the optimistic turn and apply the PDF rule.
+        const err = new ApiError({ status: 0, code: outcome.data.code as ApiError['code'], message: outcome.data.message });
+        return handlePreflightError(err, prompt, price, () => {
+          cache.remove(userMsg.id);
+          cache.remove(asstMsg.id);
+          useStreamStore.getState().clear(asstMsg.id);
+          useComposerStore.getState().setDraft(prompt);
+        });
+      }
       return 'started';
     },
-    [cache, chatId, executeStream, reserveVoucher],
+    // runFree is defined below; both are stable callbacks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cache, executeStream, handlePreflightError, preparePayments],
   );
 
-  /** PDF Compare mode: two models run in parallel on one prompt; two vouchers, two streams. */
+  /** "Continue free" / "Rerun on free model": re-quote with the free model, then run. */
+  const runFree = useCallback(
+    async (prompt: string): Promise<RunStart> => {
+      try {
+        const quote = await api.chats.quote(chatId, { prompt, modelId: FREE_MODEL_ID });
+        return run({ prompt, quote: { ...quote, free: true }, autoFreeFallback: false });
+      } catch (err) {
+        return handlePreflightError(err, prompt, micro(0), () => undefined);
+      }
+    },
+    [chatId, handlePreflightError, run],
+  );
+
+  /** PDF Compare: two `/run` calls sharing a `compareGroup`, both answers stream side by side. */
   const runCompare = useCallback(
-    async (req: CompareRequest): Promise<RunStart> => {
-      const recs = req.quote.recommendations;
-      const left = recs.find((r) => r.model_id === req.leftModelId) ?? null;
-      const right = recs.find((r) => r.model_id === req.rightModelId) ?? null;
-      if (!left || !right) return 'needs_requote';
-      const sides = [left, right].map((rec) => ({ rec, quoteId: quoteIdFor(rec, req.quote), price: rec.is_free ? micro(0) : rec.price }));
-      if (sides.some((s) => !s.rec.is_free && !s.quoteId)) return 'needs_requote';
-      const total = micro(sides.reduce((n, s) => n + s.price, 0));
+    async (req: { prompt: string; left: Quote; right: Quote }): Promise<RunStart> => {
+      const { prompt, left, right } = req;
+      if (isQuoteExpired(left.expiresAt) || isQuoteExpired(right.expiresAt)) return 'needs_requote';
+      const total = micro((left.free ? 0 : left.priceUsd) + (right.free ? 0 : right.priceUsd));
       if (total > 0) {
         const alloc = useAllocationStore.getState();
-        if (alloc.status === 'none' || alloc.status === 'closed') return 'no_allocation';
-        if (!selectCanAfford(total)(alloc)) {
-          setNeedsTopUp({ priceMicro: total, prompt: req.prompt });
+        if (alloc.status === 'closed' || !selectCanAfford(total)(alloc)) {
+          setNeedsTopUp({ priceUsd: total, prompt, freeFallback: { available: true, remaining: null, modelId: FREE_MODEL_ID } });
           return 'needs_top_up';
         }
       }
-
-      const userMsg = optimisticMessage(chatId, req.seq, { role: 'user', content: req.prompt, status: 'done' });
-      const asst = sides.map((s, i) => optimisticMessage(chatId, req.seq + 1 + i, { role: 'assistant', content: '', status: 'streaming', model_id: s.rec.model_id }));
-      cache.append(userMsg);
-      for (const m of asst) cache.append(m);
-      useComposerStore.getState().setDraft('');
-      asst.forEach((m, i) => {
-        useStreamStore.getState().start(m.id, { modelId: sides[i]?.rec.model_id ?? null });
-      });
-      setNeedsTopUp(null);
       setRunning(true);
-      const leftMsg = asst[0];
-      const rightMsg = asst[1];
-      if (!leftMsg || !rightMsg) return 'needs_requote';
-      setCompare({ userMessageId: userMsg.id, leftMessageId: leftMsg.id, rightMessageId: rightMsg.id, leftModelId: left.model_id, rightModelId: right.model_id });
-
-      const vouchers: (Voucher | undefined)[] = [];
-      for (const s of sides) {
-        if (s.rec.is_free) {
-          vouchers.push(undefined);
-          continue;
-        }
-        const res = await reserveVoucher(s.price);
-        if (res === 'cap' || res === 'no_signer') {
-          setRunning(false);
-          for (const m of asst) {
-            useStreamStore.getState().fail(m.id, { code: 'voucher', message: 'Allocation used — Top up', canRerunFree: true });
-            cache.update(m.id, { status: 'error' });
-          }
-          setNeedsTopUp({ priceMicro: total, prompt: req.prompt });
-          return 'needs_top_up';
-        }
-        vouchers.push(res.voucher);
+      try {
+        if (total > 0) await preparePayments();
+      } catch (err) {
+        setRunning(false);
+        return handlePreflightError(err, prompt, total, () => undefined);
       }
-
-      await Promise.all(
-        sides.map((s, i) => {
-          const m = asst[i];
-          if (!m) return Promise.resolve();
-          const v = vouchers[i];
-          return executeStream({ messageId: m.id, rec: s.rec, quoteId: s.quoteId, prompt: req.prompt, ...(v ? { voucher: v } : {}), price: s.price, isFree: s.rec.is_free, reserved: !s.rec.is_free });
-        }),
-      );
+      const compareGroup = compareGroupId();
+      const userMsg = optimisticMessage({ role: 'user', text: prompt });
+      const leftMsg = optimisticMessage({ role: 'assistant', text: '', status: 'streaming', modelId: left.modelId });
+      const rightMsg = optimisticMessage({ role: 'assistant', text: '', status: 'streaming', modelId: right.modelId });
+      cache.append(userMsg);
+      cache.append(leftMsg);
+      cache.append(rightMsg);
+      useComposerStore.getState().setDraft('');
+      useStreamStore.getState().start(leftMsg.id, { modelId: left.modelId, label: left.label, free: left.free });
+      useStreamStore.getState().start(rightMsg.id, { modelId: right.modelId, label: right.label, free: right.free });
+      setNeedsTopUp(null);
+      setCompare({ compareGroup, userMessageId: userMsg.id, leftMessageId: leftMsg.id, rightMessageId: rightMsg.id, leftModelId: left.modelId ?? '', rightModelId: right.modelId ?? '', prompt });
+      await Promise.all([
+        executeStream({ messageId: leftMsg.id, userMessageId: userMsg.id, quote: left, prompt, compareGroup }),
+        executeStream({ messageId: rightMsg.id, userMessageId: userMsg.id, quote: right, prompt, compareGroup }),
+      ]);
       setRunning(false);
       return 'started';
     },
-    [cache, chatId, executeStream, reserveVoucher],
-  );
-
-  /** "Rerun on free model" for a failed assistant message: replays the preceding user prompt on Free. */
-  const rerunFree = useCallback(
-    (prompt: string, seq: number, quote: QuoteResponse | null, freeAvailable: boolean) =>
-      run({ prompt, quote, modelId: null, autoFreeFallback: false, freeAvailable, forceFree: true, seq }),
-    [run],
+    [cache, executeStream, handlePreflightError, preparePayments],
   );
 
   return {
     run,
+    runFree,
     runCompare,
-    rerunFree,
     cancel,
     running,
     needsTopUp,
@@ -333,5 +330,5 @@ export function useRun(chatId: string) {
 }
 
 export function isRateLimited(err: unknown): boolean {
-  return err instanceof ApiError && err.code === 'rate_limited';
+  return err instanceof ApiError && err.code === 'RATE_LIMITED';
 }
