@@ -3,70 +3,46 @@
 import { useState } from 'react';
 
 import { clsx } from 'clsx';
-import { AnimatePresence, motion } from 'motion/react';
 
 import type { Message } from '@/lib/api/types';
-import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';
-import { collapseLoser, wipeLeft, wipeRight, withReduced } from '@/lib/motion/variants';
 
 import { MessageBubble } from '@/components/chat/MessageBubble';
-import { burstAt, useParticleBurst } from '@/components/fx/ParticleBurst';
-import { MagneticButton } from '@/components/ui/MagneticButton';
 
 export interface CompareSplitProps {
   left: Message;
   right: Message;
-  /** Picking is enabled once both streams are done. */
+  /** Picking is enabled once both answers are done. */
   canPick: boolean;
   onPick: (side: 'left' | 'right') => void;
 }
 
-/** PDF Compare mode: two models run in parallel, side by side; the pick feeds the engine. */
+/** PDF Compare: two answers side by side; the pick is sent to `POST /compare/vote`. */
 export function CompareSplit({ left, right, canPick, onPick }: CompareSplitProps) {
-  const reduced = useReducedMotionSafe();
-  const burst = useParticleBurst();
   const [picked, setPicked] = useState<'left' | 'right' | null>(null);
 
-  const pick = (side: 'left' | 'right', e: React.MouseEvent) => {
-    setPicked(side);
-    burst(burstAt(e, side === 'left' ? '#7C5CFF' : '#19E6C1', 80));
-    onPick(side);
-  };
-
   return (
-    <div className="grid gap-3 md:grid-cols-2" aria-label="Compare two models">
+    <div className="grid gap-4 md:grid-cols-2" aria-label="Compare two models">
       {(['left', 'right'] as const).map((side) => {
         const msg = side === 'left' ? left : right;
         const loser = picked !== null && picked !== side;
+        if (loser) return null;
         return (
-          <AnimatePresence key={side}>
-            {!loser && (
-              <motion.div
-                variants={withReduced(side === 'left' ? wipeLeft : wipeRight, reduced)}
-                initial="hidden"
-                animate="visible"
-                exit="exit"
-                className={clsx('space-y-3', picked === side && 'md:col-span-2')}
+          <div key={side} className={clsx('space-y-3 rounded-xl bg-bg-1 p-4 shadow-hairline', picked === side && 'md:col-span-2')}>
+            <MessageBubble message={msg} />
+            {picked === null && (
+              <button
+                type="button"
+                disabled={!canPick}
+                onClick={() => {
+                  setPicked(side);
+                  onPick(side);
+                }}
+                className="rounded-lg bg-bg-2 px-3 py-1.5 text-sm font-medium text-text-0 transition-colors hocus:bg-bg-3 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <MessageBubble message={msg} />
-                {picked === null && (
-                  <MagneticButton
-                    size="sm"
-                    variant={side === 'left' ? 'primary' : 'secondary'}
-                    disabled={!canPick}
-                    onClick={(e) => {
-                      pick(side, e);
-                    }}
-                  >
-                    Pick this one
-                  </MagneticButton>
-                )}
-              </motion.div>
+                Pick this one
+              </button>
             )}
-            {loser && (
-              <motion.div key={`${side}-loser`} variants={withReduced(collapseLoser, reduced)} initial="visible" animate="collapsed" className="hidden md:block" aria-hidden="true" />
-            )}
-          </AnimatePresence>
+          </div>
         );
       })}
     </div>
