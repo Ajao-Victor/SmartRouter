@@ -15,6 +15,7 @@ import {
   requestListSchema,
   requestSchema,
   sessionsCurrentSchema,
+  settingsSchema,
   userSchema,
   type ChallengeInput,
   type ChatPatch,
@@ -44,7 +45,7 @@ export const me = {
   /** `GET /me` — 401 means signed out. */
   get: (signal?: AbortSignal) => apiFetch('/me', { schema: userSchema, ...sig(signal) }),
   /** `PATCH /me/settings { slider?, allocationUsd?, weeklyLimitUsd?, autoFreeFallback? }`. */
-  updateSettings: (patch: SettingsPatch) => apiFetch('/me/settings', { method: 'PATCH', body: patch, schema: userSchema }),
+  updateSettings: (patch: SettingsPatch) => apiFetch('/me/settings', { method: 'PATCH', body: patch, schema: settingsSchema }),
 };
 
 export const catalog = {
