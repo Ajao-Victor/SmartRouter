@@ -3,7 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { idbStateStorage } from '@/lib/idb';
 
-export type DialogId = 'modelPicker' | 'waitlist' | 'spendPermission' | 'openAllocation';
+export type DialogId = 'modelPicker' | 'waitlist';
 export type Theme = 'dark' | 'light';
 
 export interface UiState {
@@ -14,13 +14,13 @@ export interface UiState {
   /** Persisted preferences. */
   theme: Theme;
   forceReducedMotion: boolean;
-  /** True while a Tempo SDK dialog is open — WebGL pauses, our overlays stay below it. */
+  /** True while a wallet/passkey prompt is open — overlays stay below it. */
   sdkDialogOpen: boolean;
   /** Set once `persist` has rehydrated from IndexedDB on the client. */
   hydrated: boolean;
   /** Request whose receipt drawer is open. */
   receiptRequestId: string | null;
-  /** Title shown in the TopBar (chat title written by the free model). */
+  /** Title shown in the TopBar (chat title). */
   pageTitle: string | null;
 }
 
@@ -54,7 +54,7 @@ const initialState: UiState = {
 /**
  * Global UI state. `theme` and `forceReducedMotion` persist to IndexedDB.
  * SSR strategy: `skipHydration` so the server and first client paint use defaults;
- * `StoreHydrator` calls `rehydrate()` after mount → no hydration mismatch.
+ * `PreferencesProvider` calls `rehydrate()` after mount → no hydration mismatch.
  */
 export const useUiStore = create<UiState & UiActions>()(
   persist(
