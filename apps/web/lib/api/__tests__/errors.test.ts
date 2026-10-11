@@ -1,24 +1,35 @@
 import { ApiError } from '../client';
 import { describeAction, toUiAction } from '../errors';
 
-const err = (code: ApiError['code'], retryAfter?: number) => new ApiError({ status: 400, code, message: 'm', ...(retryAfter !== undefined ? { retryAfter } : {}) });
+const err = (code: ApiError['code'], extra: { retryAfter?: number; details?: unknown } = {}) =>
+  new ApiError({ status: 400, code, message: 'm', ...(extra.retryAfter !== undefined ? { retryAfter: extra.retryAfter } : {}), ...(extra.details !== undefined ? { details: extra.details } : {}) });
 
-describe('error semantics (Technical_Requirements §5.4)', () => {
-  it('maps every API code to the required UI action', () => {
-    expect(toUiAction(err('unauthorized'))).toEqual({ kind: 'sign_in' });
-    expect(toUiAction(err('allocation_exceeded'))).toEqual({ kind: 'top_up' });
-    expect(toUiAction(err('quote_expired'))).toEqual({ kind: 'requote' });
-    expect(toUiAction(err('rate_limited', 12))).toEqual({ kind: 'cooldown', seconds: 12 });
-    expect(toUiAction(err('rate_limited'))).toEqual({ kind: 'cooldown', seconds: 10 });
-    expect(toUiAction(err('free_quota_exhausted'))).toEqual({ kind: 'free_exhausted' });
-    expect(toUiAction(err('session_closed'))).toEqual({ kind: 'open_allocation' });
-    expect(toUiAction(err('network'))).toEqual({ kind: 'offline' });
-    expect(toUiAction(new Error('boom'))).toEqual({ kind: 'toast', title: 'Something went wrong', description: 'boom' });
+describe('error semantics (PDF "Errors and edge cases")', () => {
+  it('maps every PDF code to one UI action', () => {
+    expect(toUiAction(err('UNAUTHENTICATED'))).toEqual({ kind: 'sign_in' });
+    expect(toUiAction(err('FORBIDDEN'))).toEqual({ kind: 'wrong_wallet' });
+    expect(toUiAction(err('ALLOCATION_EXHAUSTED', { details: { freeFallback: { available: true, remaining: 12 } } }))).toEqual({
+      kind: 'top_up',
+      freeFallback: { available: true, remaining: 12, modelId: 'free:llama-3.1-8b' },
+    });
+    expect(toUiAction(err('PAYMENT_REQUIRED'))).toMatchObject({ kind: 'top_up' });
+    expect(toUiAction(err('QUOTE_EXPIRED'))).toEqual({ kind: 'requote' });
+    expect(toUiAction(err('VALIDATION_FAILED'))).toEqual({ kind: 'requote' });
+    expect(toUiAction(err('QUOTE_USED'))).toEqual({ kind: 'ignore' });
+    expect(toUiAction(err('RATE_LIMITED', { retryAfter: 12 }))).toEqual({ kind: 'cooldown', seconds: 12 });
+    expect(toUiAction(err('RATE_LIMITED'))).toEqual({ kind: 'cooldown', seconds: 10 });
+    expect(toUiAction(err('FREE_LIMIT_REACHED', { details: { scope: 'global' } }))).toEqual({ kind: 'free_exhausted', scope: 'global' });
+    expect(toUiAction(err('PROVIDER_UNAVAILABLE'))).toEqual({ kind: 'other_model' });
+    expect(toUiAction(err('NOT_FOUND'))).toEqual({ kind: 'not_found' });
+    expect(toUiAction(err('NETWORK'))).toEqual({ kind: 'offline' });
+    expect(toUiAction(err('PAYMENT_CANCELLED'))).toEqual({ kind: 'payment_cancelled' });
+    expect(toUiAction(new Error('boom'))).toEqual({ kind: 'toast', title: 'Something went wrong, try again', description: 'boom' });
   });
 
   it('describes actions with the PDF copy', () => {
-    expect(describeAction({ kind: 'top_up' })).toBe('Allocation used — Top up');
-    expect(describeAction({ kind: 'free_exhausted' })).toBe('Free messages for today are used up (30/30)');
+    expect(describeAction({ kind: 'top_up', freeFallback: { available: true, remaining: null, modelId: 'free:llama-3.1-8b' } })).toContain('Top up or Continue free');
+    expect(describeAction({ kind: 'free_exhausted', scope: 'user' })).toBe('Free messages reset at 00:00 UTC');
     expect(describeAction({ kind: 'cooldown', seconds: 3 })).toContain('3 s');
+    expect(describeAction({ kind: 'payment_cancelled' })).toContain('nothing was charged');
   });
 });
