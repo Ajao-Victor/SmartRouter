@@ -94,6 +94,8 @@ async function mockSessionCall(action: 'top-up' | 'close', body: unknown): Promi
 /** User-initiated only (PDF: no automatic top-ups). */
 export async function topUpSession(amountUsd: MicroUsd): Promise<void> {
   if (env.mock) {
+    const { mockDebit } = await import('./walletActions');
+    await mockDebit(amountUsd);
     await mockSessionCall('top-up', { amountUsd: toUsdString(amountUsd) });
     return;
   }
