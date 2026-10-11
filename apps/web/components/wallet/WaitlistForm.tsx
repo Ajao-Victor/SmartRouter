@@ -14,7 +14,6 @@ import { pop, withReduced } from '@/lib/motion/variants';
 
 import { toast } from '@/stores/toastStore';
 
-import { burstAt, useParticleBurst } from '@/components/fx/ParticleBurst';
 import { Input } from '@/components/ui/Input';
 import { MagneticButton } from '@/components/ui/MagneticButton';
 
@@ -39,7 +38,6 @@ export interface WaitlistFormProps {
 /** PDF waitlist: email, country, interest (naira | credits). */
 export function WaitlistForm({ interest, onDone }: WaitlistFormProps) {
   const reduced = useReducedMotionSafe();
-  const burst = useParticleBurst();
   const [email, setEmail] = useState('');
   const [country, setCountry] = useState<string>('NG');
   const [error, setError] = useState<string | undefined>(undefined);
@@ -48,8 +46,6 @@ export function WaitlistForm({ interest, onDone }: WaitlistFormProps) {
   const join = useMutation({
     mutationFn: (input: WaitlistInput) => api.waitlist.join(input),
   });
-
-  const [at, setAt] = useState<{ clientX: number; clientY: number } | null>(null);
 
   const submit = (e: { preventDefault: () => void }) => {
     e.preventDefault();
@@ -62,7 +58,6 @@ export function WaitlistForm({ interest, onDone }: WaitlistFormProps) {
     join.mutate(parsed.data, {
       onSuccess: () => {
         setDone(true);
-        if (at) burst(burstAt(at, '#19E6C1', 40));
         toast.success("You're on the list", interest === 'naira' ? 'Naira top-ups via Paystack' : 'MPP Credits');
         onDone?.();
       },
@@ -114,9 +109,6 @@ export function WaitlistForm({ interest, onDone }: WaitlistFormProps) {
         size="md"
         loading={join.isPending}
         className="w-full"
-        onClick={(e) => {
-          setAt({ clientX: e.clientX, clientY: e.clientY });
-        }}
       >
         Join the {interest === 'naira' ? 'naira' : 'credits'} waitlist
       </MagneticButton>
