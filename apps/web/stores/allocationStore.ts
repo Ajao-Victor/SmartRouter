@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import type { SessionSummary, SessionsCurrent } from '@/lib/api/types';
+import type { DepositUsage, SessionNetwork, SessionSummary, SessionsCurrent } from '@/lib/api/types';
 import { clampMicro, micro, type MicroUsd } from '@/lib/money';
 
 export type AllocationStatus = 'none' | 'open' | 'used' | 'toppingUp' | 'closing' | 'closed';
@@ -19,15 +19,28 @@ export interface AllocationState {
   status: AllocationStatus;
   /** Last charge applied — drives the header drain animation. */
   lastChargeUsd: MicroUsd;
+  /** Live `network` from `/sessions/current`: escrow token, payee, operator. */
+  network: SessionNetwork | null;
+  /** Backend's own alert (`low` / `used` …), when it sends one. */
+  alert: string | null;
+  /** Weekly spend vs limit. */
+  weeklySpentUsd: MicroUsd;
+  weeklyLimitUsd: MicroUsd | null;
+  /** Free messages left today (from quotes / `POST /chats`). */
+  freeRemaining: number | null;
+  paidRunsEnabled: boolean;
 }
 
 export interface AllocationActions {
   /** Mirror `GET /sessions/current` (PDF: refresh it after each `done` event). */
   hydrate: (current: SessionsCurrent | null) => void;
-  /** `meta.remainingUsd` on a paid run — the freshest number the server has. */
+  /** `usage.deposit` from `meta` / `done` — the freshest numbers the server has. */
+  applyUsage: (deposit: DepositUsage) => void;
+  /** `meta.remainingUsd` on a paid run. */
   setRemaining: (remainingUsd: MicroUsd) => void;
   /** Apply a `done.chargedUsd` optimistically until the session refetches. */
   applyCharge: (chargedUsd: MicroUsd) => void;
+  setFreeRemaining: (n: number | null) => void;
   beginTopUp: () => void;
   beginClose: () => void;
   settle: () => void;
@@ -45,9 +58,15 @@ const initialState: AllocationState = {
   suggestedDepositUsd: micro(2_000_000),
   status: 'none',
   lastChargeUsd: zero,
+  network: null,
+  alert: null,
+  weeklySpentUsd: zero,
+  weeklyLimitUsd: null,
+  freeRemaining: null,
+  paidRunsEnabled: true,
 };
 
-function statusFor(session: SessionSummary): AllocationStatus {
+function statusFor(session: Pick<SessionSummary, 'status' | 'remainingUsd'>): AllocationStatus {
   if (session.status === 'closed') return 'closed';
   return session.remainingUsd <= 0 ? 'used' : 'open';
 }
@@ -56,12 +75,17 @@ export const useAllocationStore = create<AllocationState & AllocationActions>()(
   ...initialState,
   hydrate: (current) => {
     if (!current) {
-      set({ ...initialState });
+      set((prev) => ({ ...initialState, freeRemaining: prev.freeRemaining }));
       return;
     }
-    const s = current.session;
+    const s = current.session ?? (current.usage?.deposit ? { ...current.usage.deposit, requests: 0, status: 'open' } : null);
     set((prev) => ({
       suggestedDepositUsd: current.suggestedDepositUsd,
+      network: current.network ?? prev.network,
+      paidRunsEnabled: current.paidRunsEnabled,
+      alert: current.usage?.alert ?? null,
+      weeklySpentUsd: current.usage?.weekly?.spentUsd ?? prev.weeklySpentUsd,
+      weeklyLimitUsd: current.usage?.weekly?.limitUsd ?? prev.weeklyLimitUsd,
       channelId: s?.channelId ?? null,
       depositUsd: s?.depositUsd ?? zero,
       spentUsd: s?.spentUsd ?? zero,
@@ -69,6 +93,15 @@ export const useAllocationStore = create<AllocationState & AllocationActions>()(
       requests: s?.requests ?? 0,
       status: s ? statusFor(s) : 'none',
       lastChargeUsd: prev.lastChargeUsd,
+    }));
+  },
+  applyUsage: (deposit) => {
+    set((prev) => ({
+      channelId: deposit.channelId ?? prev.channelId,
+      depositUsd: deposit.depositUsd,
+      spentUsd: deposit.spentUsd,
+      remainingUsd: deposit.remainingUsd,
+      status: prev.status === 'closed' ? 'closed' : deposit.remainingUsd <= 0 ? 'used' : 'open',
     }));
   },
   setRemaining: (remainingUsd) => {
@@ -85,6 +118,9 @@ export const useAllocationStore = create<AllocationState & AllocationActions>()(
         status: s.status === 'closed' ? 'closed' : remaining <= 0 ? 'used' : 'open',
       };
     });
+  },
+  setFreeRemaining: (freeRemaining) => {
+    set({ freeRemaining });
   },
   beginTopUp: () => {
     set({ status: 'toppingUp' });
@@ -104,7 +140,7 @@ export const useAllocationStore = create<AllocationState & AllocationActions>()(
 
 export const selectRemainingPct = (s: AllocationState): number => (s.depositUsd > 0 ? s.remainingUsd / s.depositUsd : 0);
 
-export const selectIsLow = (s: AllocationState): boolean => s.status === 'open' && selectRemainingPct(s) < LOW_ALLOCATION_PCT;
+export const selectIsLow = (s: AllocationState): boolean => s.status === 'open' && (s.alert === 'low' || selectRemainingPct(s) < LOW_ALLOCATION_PCT);
 
 export const selectIsUsed = (s: AllocationState): boolean => s.status === 'used';
 
