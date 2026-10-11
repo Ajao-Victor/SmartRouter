@@ -3,40 +3,36 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { isApiError } from '@/lib/api/client';
-import { api } from '@/lib/api/endpoints';
 import { queryKeys } from '@/lib/api/keys';
 import type { MicroUsd } from '@/lib/money';
-import { getSessionClient } from '@/lib/tempo/session';
+import { topUpSession, toPaymentError } from '@/lib/tempo/session';
+import { getCurrentWallet } from '@/lib/tempo/wallet';
 
 import { useAllocationStore } from '@/stores/allocationStore';
-import { useSignerStore } from '@/stores/signerStore';
 import { toast } from '@/stores/toastStore';
 
 /**
- * PDF step 5: "Allocation used — Top up $2". One tap calls the session's top-up without
- * closing it. NEVER automatic: this mutation is only ever invoked from a click handler
- * (lint bans timers in this file).
+ * PDF "Top up": `manager.topUp('2')`. NEVER automatic — this mutation is only ever invoked from
+ * a click handler (lint bans timers in this file). The first top-up also prepares payments if
+ * the user has never run a paid model (one passkey approval).
  */
 export function useTopUp() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (amountMicro: MicroUsd) => {
-      const alloc = useAllocationStore.getState();
-      if (!alloc.channelId) throw new Error('No open allocation to top up');
-      alloc.beginTopUp();
+    mutationFn: async (amountUsd: MicroUsd) => {
+      const wallet = getCurrentWallet();
+      if (!wallet) throw new Error('Sign in with your wallet first');
+      useAllocationStore.getState().beginTopUp();
       try {
-        const status = await getSessionClient().topUp({ channelId: alloc.channelId, amountMicro });
-        const session = await api.sessions.notifyTopUp(alloc.channelId, amountMicro);
-        useSignerStore.getState().setDeposit(status.depositMicro);
-        useAllocationStore.getState().endTopUp(session);
-        return session;
+        await wallet.preparePayments(useAllocationStore.getState().suggestedDepositUsd);
+        await topUpSession(amountUsd);
       } catch (err) {
-        useAllocationStore.getState().endTopUp(null);
-        throw err;
+        throw toPaymentError(err) ?? err;
+      } finally {
+        useAllocationStore.getState().settle();
       }
     },
-    onSuccess: (session) => {
-      qc.setQueryData(queryKeys.session.current(), session);
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.session.current() });
       toast.success('Topped up', 'Your allocation is refilled.');
     },
