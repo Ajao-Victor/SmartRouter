@@ -21,7 +21,7 @@ function makeQueryClient(): QueryClient {
       queries: {
         staleTime: 30_000,
         retry: (count, err) => {
-          if (isApiError(err) && (err.code === 'unauthorized' || err.code === 'validation')) return false;
+          if (isApiError(err) && (err.code === 'UNAUTHENTICATED' || err.code === 'VALIDATION_FAILED' || err.code === 'FORBIDDEN')) return false;
           return count < 1;
         },
         refetchOnWindowFocus: true,
