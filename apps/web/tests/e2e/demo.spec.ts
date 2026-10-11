@@ -1,58 +1,61 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * PDF demo path on mocks: deposit → allocation → task → recommendation → result → top-up → receipt.
- * Runs against `NEXT_PUBLIC_MOCK=1 pnpm dev` (playwright.config webServer).
+ * PDF demo path on mocks: sign in → describe the task → quoted options → run → streamed answer
+ * with charge and receipt → wallet shows the session → top-up → activity.
+ * Runs against `NEXT_PUBLIC_MOCK=1 next dev` (playwright.config webServer).
  */
 test.describe('demo path', () => {
-  test('deposit → allocation → task → recommendation → result → top-up → receipt', async ({ page }) => {
+  test('sign in → describe → pick a model → answer → receipt → top-up → activity', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Tell SmartRouter what you want done');
 
-    // Sign in (mock passkey dialog) → app
+    // Sign in (mock passkey → SIWE challenge/verify → cookie) → app
     await page.getByRole('button', { name: 'Sign in with passkey' }).click();
     await page.waitForURL('**/chat');
 
-    // Wallet: deposit (mock adds $2 USDC.e)
-    await page.getByRole('button', { name: 'Wallet' }).click();
-    const sheet = page.getByRole('dialog');
-    await expect(sheet).toContainText('USDC.e');
-    await sheet.getByRole('button', { name: 'Deposit' }).click();
-    await expect(sheet).toContainText('$14.50');
-
-    // Allocation: one scoped spend permission (mock approval dialog) → session channel → $2 ring
-    await sheet.getByRole('button', { name: /Open allocation · \$2/ }).click();
-    await expect(page.getByText('Allocation open')).toBeVisible({ timeout: 15_000 });
-    await expect(sheet.getByRole('button', { name: /Top up \$2/ })).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(sheet).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Allocation: $2.00 remaining of $2.00' })).toBeVisible();
-
-    // Task: describe it → classified and quoted as the first prompt
-    await page.getByLabel('Or describe the task').fill('Write a short cover letter for a payments engineer role at Paystack');
-    await page.getByRole('button', { name: 'Get a quote' }).click();
+    // Describe the task → POST /chats returns the quoted options
+    await page.getByLabel('Describe the task').fill('Write a short cover letter for a payments engineer role at Paystack');
+    await page.getByRole('button', { name: 'Get options' }).click();
     await page.waitForURL('**/chat/**');
-
-    // Recommendation: four options with attribution
     const options = page.getByRole('option');
     await expect(options).toHaveCount(4);
     await expect(page.getByText('Quality data: LMArena, Artificial Analysis').first()).toBeVisible();
     await expect(page.getByRole('option', { name: 'Free · Llama 3.1 8B' })).toBeVisible();
 
-    // Result: run the top pick and stream a reply with its model tag and receipt link
-    await page.getByRole('button', { name: /Auto · run top pick/ }).click();
-    await expect(page.getByRole('button', { name: 'Receipt' }).first()).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByLabel('Assistant reply').first()).toContainText('via MPP');
+    // Pick the recommended model → POST /run streams the answer; the first paid run opens the $2 session
+    await options.first().click();
+    const reply = page.getByLabel('Assistant reply').first();
+    await expect(reply.getByRole('button', { name: 'Receipt' })).toBeVisible({ timeout: 20_000 });
+    await expect(reply).toContainText('Cover letter');
+    await expect(page.getByRole('button', { name: /Allocation: \$1\.99/ })).toBeVisible();
 
-    // Receipt: session id now, settlement later
-    await page.getByRole('button', { name: 'Receipt' }).first().click();
+    // Receipt: charge and status from GET /requests/:id
+    await reply.getByRole('button', { name: 'Receipt' }).click();
     const drawer = page.getByRole('dialog');
-    await expect(drawer).toContainText('Session');
+    await expect(drawer).toContainText('Succeeded');
+    await page.keyboard.press('Escape');
+    await expect(drawer).toBeHidden();
+
+    // Second turn from the composer: the Send button carries the quoted price
+    const message = page.getByLabel('Message');
+    await message.fill('Make it two sentences shorter');
+    await expect(page.getByRole('button', { name: /Send · \$0\./ })).toBeVisible({ timeout: 10_000 });
+    await message.press('Enter');
+    await expect(page.getByLabel('Assistant reply').nth(1).getByRole('button', { name: 'Receipt' })).toBeVisible({ timeout: 20_000 });
+
+    // Wallet: the payment session and a user-initiated top-up (never automatic)
+    await page.getByRole('button', { name: /Allocation: \$/ }).click();
+    const sheet = page.getByRole('dialog');
+    await expect(sheet).toContainText('Payment session');
+    await sheet.getByRole('button', { name: 'Top up $2' }).click();
+    await expect(page.getByText('Topped up')).toBeVisible();
+    await expect(sheet).toContainText('$4.00');
     await page.keyboard.press('Escape');
 
-    // Top-up from the HUD panel (no automatic top-ups)
-    await page.getByRole('button', { name: /Allocation: \$/ }).click();
-    await page.getByRole('button', { name: /Top up \$2/ }).first().click();
-    await expect(page.getByText('Topped up')).toBeVisible();
+    // Activity lists the runs
+    await page.getByRole('link', { name: 'Activity' }).click();
+    await page.waitForURL('**/activity');
+    await expect(page.getByRole('list', { name: 'Requests' }).getByRole('listitem').first()).toBeVisible();
   });
 });
