@@ -7,13 +7,14 @@ import { micro } from '@/lib/money';
 import HomePage from '@/app/page';
 
 import { TopUpBar } from '@/components/allocation/TopUpBar';
+import { Composer } from '@/components/chat/Composer';
+import { ModelOptions } from '@/components/chat/ModelOptions';
 import { ReducedMotionProvider } from '@/components/layout/ReducedMotionProvider';
-import { RecommendationPanel } from '@/components/recommend/RecommendationPanel';
 import { AllocationControls } from '@/components/wallet/AllocationControls';
-import { SpendPermissionCard } from '@/components/wallet/SpendPermissionCard';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }), useSearchParams: () => new URLSearchParams() }));
-vi.mock('@/lib/api/endpoints', () => ({ api: { models: { list: vi.fn().mockResolvedValue([]) }, auth: { nonce: vi.fn(), verify: vi.fn(), logout: vi.fn() } } }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }), useSearchParams: () => new URLSearchParams(), usePathname: () => '/' }));
+vi.mock('@/lib/api/endpoints', () => ({ api: { catalog: { list: vi.fn().mockResolvedValue([]) }, auth: { challenge: vi.fn(), verify: vi.fn(), logout: vi.fn() } } }));
+vi.mock('@/components/landing/LandingFx', () => ({ LandingFx: () => null }));
 
 async function serious(container: HTMLElement): Promise<string[]> {
   const result = await axe.run(container, {
@@ -37,28 +38,19 @@ describe('accessibility (axe, serious/critical only)', () => {
     expect(await serious(container)).toEqual([]);
   }, 20_000);
 
-  it('recommendations, top-up bar, allocation controls and spend permission', async () => {
+  it('chat money components: options, composer, top-up bar, allocation controls', async () => {
     const { container } = wrap(
       <main>
-        <RecommendationPanel
-          data={{
-            classification: { task_type: 'writing', complexity: 'short', language: 'en', needs_web: false },
-            recommendations: [
-              { model_id: 'a', label: 'GLM 5.3 Flash', provider: 'OpenRouter', price: micro(900), speed_label: 'fast', reason: 'r', score: 1, quality: 0.8, is_free: false, is_best_quality: false, searches_web: false, quote_id: 'q' },
-              { model_id: 'f', label: 'Free · Llama 3.1 8B', provider: 'CF', price: micro(0), speed_label: 'fast', reason: 'r', score: 0, quality: 0.5, is_free: true, is_best_quality: false, searches_web: false, quote_id: null },
-            ],
-            quote: { id: 'q', user_id: 'u', chat_id: 'c', model_id: 'a', prompt_hash: 'h', context_tokens: 1, price: micro(900), est_cost: micro(818), expires_at: new Date(Date.now() + 300_000).toISOString() },
-            suggestion: null,
-          }}
-          slider="balanced"
-          onSliderChange={vi.fn()}
-          selectedModelId="a"
+        <ModelOptions
+          options={[
+            { modelId: 'a', label: 'GLM 5.3 Flash', provider: 'OpenRouter', quoteId: 'q', priceUsd: micro(900), speed: 'fast', reason: 'r', free: false, quality: 0.8, bestQuality: false, expiresAt: null },
+            { modelId: 'f', label: 'Free · Llama 3.1 8B', provider: 'CF', quoteId: null, priceUsd: micro(0), speed: 'fast', reason: 'r', free: true, quality: 0.5, bestQuality: false, expiresAt: null },
+          ]}
           onPick={vi.fn()}
-          onAuto={vi.fn()}
         />
-        <TopUpBar topUpMicro={micro(2_000_000)} onTopUp={vi.fn()} onContinueFree={vi.fn()} />
-        <AllocationControls allocation={micro(2_000_000)} weeklyLimit={micro(10_000_000)} autoFreeFallback onChange={vi.fn()} />
-        <SpendPermissionCard status="none" onApprove={vi.fn()} onRevoke={vi.fn()} />
+        <Composer quote={{ priceUsd: micro(900), free: false }} currentModel={{ label: 'GLM 5.3 Flash', isFree: false }} onSend={vi.fn()} />
+        <TopUpBar topUpUsd={micro(2_000_000)} onTopUp={vi.fn()} onContinueFree={vi.fn()} />
+        <AllocationControls allocationUsd={micro(2_000_000)} weeklyLimitUsd={micro(10_000_000)} autoFreeFallback onChange={vi.fn()} />
       </main>,
     );
     expect(await serious(container)).toEqual([]);

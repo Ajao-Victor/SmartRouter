@@ -13,7 +13,8 @@ function renderHome() {
 }
 
 const push = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: vi.fn(), prefetch: vi.fn() }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: vi.fn(), prefetch: vi.fn() }), usePathname: () => '/' }));
+vi.mock('@/components/landing/LandingFx', () => ({ LandingFx: () => null }));
 
 describe('HomePage (landing)', () => {
   it('renders the pitch, task chips, saving proof and coming-soon teasers', () => {
