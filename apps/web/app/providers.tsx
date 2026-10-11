@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { isApiError } from '@/lib/api/client';
 
+import { AuthProvider } from '@/components/auth/AuthProvider';
 import { LiveRegion } from '@/components/layout/LiveRegion';
 import { MockProvider } from '@/components/layout/MockProvider';
 import { PreferencesProvider } from '@/components/layout/PreferencesProvider';
@@ -41,9 +42,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
         {/* Everything that can call the API sits inside MockProvider so no request escapes
             before the MSW worker is active (LiveRegion reads model labels). */}
         <MockProvider>
-          <div className="relative z-content">{children}</div>
-          <WaitlistDialog />
-          <LiveRegion />
+          {/* Privy sign-in + the X-Session-Token session (Handover "Sign-in"). */}
+          <AuthProvider>
+            <div className="relative z-content">{children}</div>
+            <WaitlistDialog />
+            <LiveRegion />
+          </AuthProvider>
         </MockProvider>
         <Toaster />
       </PreferencesProvider>

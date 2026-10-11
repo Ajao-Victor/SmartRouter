@@ -3,9 +3,9 @@ import path from 'node:path';
 import type { NextConfig } from 'next';
 
 /**
- * Content Security Policy — see security.md §4 and the architecture PDF ("Vercel environment
- * variables"). The browser talks to exactly three places: the SmartRouter API, the public Tempo
- * RPC (viem wallet client) and Sentry. Provider MPP hosts never appear in this bundle
+ * Content Security Policy — see security.md §4 and the handover ("Environments and config"). The
+ * browser talks to the SmartRouter API, the public Tempo RPC (viem wallet client), Privy (sign-in
+ * modal + embedded wallet iframe, Cloudflare Turnstile captcha) and Sentry. Provider MPP hosts never appear in this bundle
  * (`pnpm guard:hosts`). The API is called directly — never through a Vercel rewrite — so the
  * backend sees the real client IP and the `sr_session` cookie stays first-party.
  */
@@ -25,20 +25,28 @@ const originOf = (u: string): string => {
   }
 };
 
-const connectSrc = ["'self'", originOf(apiUrl), originOf(rpcUrl), originOf(sentryDsn)].filter(Boolean).join(' ');
+/** Privy's documented CSP origins (auth modal, embedded wallet iframe, RPC proxy, captcha, WalletConnect). */
+const PRIVY = {
+  connect: ['https://auth.privy.io', 'https://*.privy.io', 'https://*.rpc.privy.systems', 'wss://relay.walletconnect.com', 'wss://relay.walletconnect.org', 'https://explorer-api.walletconnect.com'],
+  frame: ['https://auth.privy.io', 'https://verify.walletconnect.com', 'https://verify.walletconnect.org', 'https://challenges.cloudflare.com'],
+  script: ['https://challenges.cloudflare.com'],
+};
+
+const connectSrc = ["'self'", originOf(apiUrl), originOf(rpcUrl), originOf(sentryDsn), ...PRIVY.connect].filter(Boolean).join(' ');
 const mediaSrc = ["'self'", 'blob:', objectStorageHost ? `https://${objectStorageHost}` : ''].filter(Boolean).join(' ');
 const imgSrc = ["'self'", 'data:', 'blob:', objectStorageHost ? `https://${objectStorageHost}` : ''].filter(Boolean).join(' ');
 
 const csp = [
   `default-src 'self'`,
   // three.js (landing field) needs wasm-unsafe-eval; Next dev needs unsafe-eval/unsafe-inline for HMR.
-  `script-src 'self' 'wasm-unsafe-eval'${isDev ? " 'unsafe-eval' 'unsafe-inline'" : " 'unsafe-inline'"}`,
+  `script-src 'self' 'wasm-unsafe-eval' ${PRIVY.script.join(' ')}${isDev ? " 'unsafe-eval' 'unsafe-inline'" : " 'unsafe-inline'"}`,
   `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
   `font-src 'self' https://fonts.gstatic.com data:`,
-  `img-src ${imgSrc}`,
+  `img-src ${imgSrc} https://auth.privy.io`,
   `media-src ${mediaSrc}`,
   `connect-src ${connectSrc}${isDev ? ' ws: wss: http://localhost:* http://127.0.0.1:*' : ''}`,
-  `frame-src 'none'`,
+  `frame-src ${PRIVY.frame.join(' ')}`,
+  `child-src ${PRIVY.frame.join(' ')}`,
   `worker-src 'self' blob:`,
   `frame-ancestors 'none'`,
   `base-uri 'self'`,
@@ -50,7 +58,7 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  // WebAuthn (Tempo passkeys) needs publickey-credentials-*; nothing else is granted.
+  // Privy may offer passkeys inside its modal (publickey-credentials-*); nothing else is granted.
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(self), publickey-credentials-get=(self), publickey-credentials-create=(self)' },
 ];
 
@@ -74,7 +82,9 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }];
   },
-  webpack(config: { ignoreWarnings?: unknown[] }) {
+  webpack(config: { ignoreWarnings?: unknown[]; resolve?: { alias?: Record<string, unknown> } }) {
+    // Privy's optional Farcaster/Solana mini-app peer is never used here (email + Google only).
+    config.resolve = { ...config.resolve, alias: { ...config.resolve?.alias, '@farcaster/mini-app-solana': false } };
     config.ignoreWarnings = [...(config.ignoreWarnings ?? []), { module: /require-in-the-middle|import-in-the-middle|@opentelemetry/ }, { module: /virtualMasterPool/ }];
     return config;
   },

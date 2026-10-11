@@ -84,7 +84,7 @@ export function Hero({ onSignIn, signingIn = false, onStart, starting = false }:
             onClick={onSignIn}
             loading={signingIn}
           >
-            Sign in with passkey
+            Sign in with email or Google
           </Button>
         </motion.div>
         <motion.p

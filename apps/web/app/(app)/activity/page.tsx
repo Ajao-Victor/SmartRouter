@@ -5,12 +5,21 @@ import { formatUsd } from '@/lib/money';
 import { useRequests } from '@/hooks/useReceipt';
 import { useUiStore } from '@/stores/uiStore';
 
+import { SignInGate } from '@/components/auth/SignInGate';
 import { Skeleton } from '@/components/ui/Skeleton';
 
 const STATUS: Record<string, string> = { pending: 'Pending', running: 'Running', succeeded: 'Done', failed: 'Failed', refunded: 'Refunded' };
 
-/** `GET /requests` — past runs and what they charged; tap a row for its receipt. */
 export default function ActivityPage() {
+  return (
+    <SignInGate what="your activity">
+      <Activity />
+    </SignInGate>
+  );
+}
+
+/** `GET /requests` — past runs and what they charged; tap a row for its receipt. */
+function Activity() {
   const requests = useRequests();
   const openReceipt = useUiStore((s) => s.openReceipt);
 

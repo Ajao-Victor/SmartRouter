@@ -19,6 +19,12 @@ export interface AllocationState {
   status: AllocationStatus;
   /** Last charge applied — drives the header drain animation. */
   lastChargeUsd: MicroUsd;
+  /** Handover: `paidRunsEnabled: false` → hide paid models. */
+  paidRunsEnabled: boolean;
+  /** `network.chainId` from `/sessions/current` — the chain the wallet client is built on. */
+  chainId: number | null;
+  /** Deposit the user picked in the deposit dialog; null = `suggestedDepositUsd`. */
+  chosenDepositUsd: MicroUsd | null;
 }
 
 export interface AllocationActions {
@@ -28,6 +34,8 @@ export interface AllocationActions {
   setRemaining: (remainingUsd: MicroUsd) => void;
   /** Apply a `done.chargedUsd` optimistically until the session refetches. */
   applyCharge: (chargedUsd: MicroUsd) => void;
+  /** The deposit the next manager opens with (Handover: `maxDeposit`). */
+  chooseDeposit: (amountUsd: MicroUsd | null) => void;
   beginTopUp: () => void;
   beginClose: () => void;
   settle: () => void;
@@ -45,6 +53,9 @@ const initialState: AllocationState = {
   suggestedDepositUsd: micro(2_000_000),
   status: 'none',
   lastChargeUsd: zero,
+  paidRunsEnabled: true,
+  chainId: null,
+  chosenDepositUsd: null,
 };
 
 function statusFor(session: SessionSummary): AllocationStatus {
@@ -69,6 +80,8 @@ export const useAllocationStore = create<AllocationState & AllocationActions>()(
       requests: s?.requests ?? 0,
       status: s ? statusFor(s) : 'none',
       lastChargeUsd: prev.lastChargeUsd,
+      paidRunsEnabled: current.paidRunsEnabled,
+      chainId: current.network?.chainId ?? prev.chainId,
     }));
   },
   setRemaining: (remainingUsd) => {
@@ -85,6 +98,9 @@ export const useAllocationStore = create<AllocationState & AllocationActions>()(
         status: s.status === 'closed' ? 'closed' : remaining <= 0 ? 'used' : 'open',
       };
     });
+  },
+  chooseDeposit: (chosenDepositUsd) => {
+    set({ chosenDepositUsd });
   },
   beginTopUp: () => {
     set({ status: 'toppingUp' });
@@ -108,8 +124,11 @@ export const selectIsLow = (s: AllocationState): boolean => s.status === 'open' 
 
 export const selectIsUsed = (s: AllocationState): boolean => s.status === 'used';
 
-/** The next run would pass the deposit (PDF: show Top up / Continue free before contacting the server). */
+/** The deposit a new session opens with: the user's choice, else `suggestedDepositUsd`. */
+export const selectNextDeposit = (s: AllocationState): MicroUsd => s.chosenDepositUsd ?? s.suggestedDepositUsd;
+
+/** The next run would pass the deposit (show the deposit dialog / Continue free before contacting the server). */
 export const selectCanAfford =
   (priceUsd: MicroUsd) =>
   (s: AllocationState): boolean =>
-    s.status === 'none' ? priceUsd <= s.suggestedDepositUsd : s.status !== 'closed' && priceUsd <= s.remainingUsd;
+    s.status === 'none' || s.status === 'closed' ? priceUsd <= selectNextDeposit(s) : priceUsd <= s.remainingUsd;

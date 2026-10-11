@@ -5,7 +5,6 @@
 import { apiFetch } from '@/lib/api/client';
 import {
   catalogSchema,
-  challengeResponseSchema,
   chatHistorySchema,
   chatListSchema,
   chatSchema,
@@ -14,9 +13,11 @@ import {
   recommendResponseSchema,
   requestListSchema,
   requestSchema,
+  privySignInSchema,
   sessionsCurrentSchema,
+  settingsSchema,
   userSchema,
-  type ChallengeInput,
+  type PrivySignInInput,
   type ChatPatch,
   type CompareVoteInput,
   type CreateChatInput,
@@ -25,26 +26,23 @@ import {
   type RecommendInput,
   type SettingsPatch,
   type TaskType,
-  type VerifyInput,
   type WaitlistInput,
 } from '@/lib/api/types';
 
 const sig = (signal?: AbortSignal) => (signal ? { signal } : {});
 
 export const auth = {
-  /** `POST /auth/challenge { address, origin }` → SIWE message for chain 4217/42431 with a nonce. */
-  challenge: (input: ChallengeInput) => apiFetch('/auth/challenge', { method: 'POST', body: input, schema: challengeResponseSchema }),
-  /** `POST /auth/verify { message, signature }` sets the `sr_session` cookie. */
-  verify: (input: VerifyInput) => apiFetch('/auth/verify', { method: 'POST', body: input }),
-  /** `POST /auth/logout` clears the cookie. */
+  /** `POST /auth/privy { identityToken }` → `{ userId, address, email, loginMethod, token, expiresAt }`. */
+  privy: (input: PrivySignInInput) => apiFetch('/auth/privy', { method: 'POST', body: input, schema: privySignInSchema }),
+  /** `POST /auth/logout` ends the session. */
   logout: () => apiFetch('/auth/logout', { method: 'POST' }),
 };
 
 export const me = {
-  /** `GET /me` — 401 means signed out. */
+  /** `GET /me` → `{ id, address, email, loginMethod, usage, settings }`. */
   get: (signal?: AbortSignal) => apiFetch('/me', { schema: userSchema, ...sig(signal) }),
-  /** `PATCH /me/settings { slider?, allocationUsd?, weeklyLimitUsd?, autoFreeFallback? }`. */
-  updateSettings: (patch: SettingsPatch) => apiFetch('/me/settings', { method: 'PATCH', body: patch, schema: userSchema }),
+  /** `PATCH /me/settings { slider?, allocationUsd?, weeklyLimitUsd?, autoFreeFallback?, country? }` → updated settings. */
+  updateSettings: (patch: SettingsPatch) => apiFetch('/me/settings', { method: 'PATCH', body: patch, schema: settingsSchema }),
 };
 
 export const catalog = {
@@ -57,7 +55,7 @@ export const catalog = {
 };
 
 export const chats = {
-  /** `GET /chats?cursor=` */
+  /** `GET /chats?cursor=&limit=` */
   list: (cursor?: string | null, signal?: AbortSignal) =>
     apiFetch(cursor ? `/chats?cursor=${encodeURIComponent(cursor)}` : '/chats', { schema: chatListSchema, ...sig(signal) }),
   /** `POST /chats { taskType?, description?, slider? }` → `chatId`, `options[]`. */
@@ -76,7 +74,7 @@ export const chats = {
 };
 
 export const sessions = {
-  /** `GET /sessions/current` → `suggestedDepositUsd`, `network`, `session?`. */
+  /** `GET /sessions/current` → `paidRunsEnabled`, `network`, `suggestedDepositUsd`, `usage`, `session`. */
   current: (signal?: AbortSignal) => apiFetch('/sessions/current', { schema: sessionsCurrentSchema, ...sig(signal) }),
 };
 

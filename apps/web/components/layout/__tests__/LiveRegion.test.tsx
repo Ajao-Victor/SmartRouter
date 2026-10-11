@@ -30,7 +30,7 @@ describe('LiveRegion', () => {
     });
     expect(region).toHaveTextContent(/^Done/);
     act(() => {
-      useAllocationStore.getState().hydrate({ suggestedDepositUsd: micro(2_000_000), network: 'moderato', session: { depositUsd: micro(100), spentUsd: micro(100), remainingUsd: micro(0), requests: 1, channelId: 'c', status: 'open', openedAt: null } });
+      useAllocationStore.getState().hydrate({ suggestedDepositUsd: micro(2_000_000), paidRunsEnabled: true, usage: null, network: { name: null, chainId: 42431, token: null, recipient: null, operator: null }, session: { depositUsd: micro(100), spentUsd: micro(100), remainingUsd: micro(0), requests: 1, channelId: 'c', status: 'open', openedAt: null } });
     });
     expect(region).toHaveTextContent('Allocation used — Top up');
   });

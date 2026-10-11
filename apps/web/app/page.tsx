@@ -29,12 +29,14 @@ export default function HomePage() {
       router.push('/chat');
     });
   };
-  // Tempo passkey dialog → SIWE → cookie → app.
+  // Privy (email or Google) → POST /auth/privy → session token → app. Signed in already: straight in.
   const onSignIn = () => {
-    auth.signIn.mutate(undefined, {
-      onSuccess: () => {
-        router.push('/chat');
-      },
+    if (auth.isSignedIn) {
+      openApp();
+      return;
+    }
+    auth.signIn(() => {
+      router.push('/chat');
     });
   };
 
@@ -48,9 +50,11 @@ export default function HomePage() {
             Smart<span className="text-beam">Router</span>
           </span>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={onSignIn} loading={auth.signIn.isPending}>
-              Sign in
-            </Button>
+            {!auth.isSignedIn && (
+              <Button variant="ghost" size="sm" onClick={onSignIn} loading={auth.signingIn}>
+                Sign in
+              </Button>
+            )}
             <Button size="sm" variant="secondary" onClick={openApp} loading={navigating}>
               Open app
             </Button>
@@ -59,7 +63,7 @@ export default function HomePage() {
         <main className="space-y-20 pb-24">
           <Hero
             onSignIn={onSignIn}
-            signingIn={auth.signIn.isPending}
+            signingIn={auth.signingIn}
             onStart={openApp}
             starting={navigating}
           />

@@ -1,5 +1,5 @@
 /**
- * MSW handlers for the LIVE contract ("SmartRouter Frontend Architecture"). Routes have no
+ * MSW handlers for the LIVE contract ("SmartRouter Frontend Handover", Oct 11 2026). Routes have no
  * `/api` prefix, money is USD decimals, errors are `{ code, message, details? }`, `/run` streams
  * SSE (`meta`, `delta`, heartbeat comments, `fallback`, `pending`, `done`, `error`).
  * Prompt hooks for demos: `[fallback]`, `[fail]`, `[pending]`, `[slow]`.
@@ -27,6 +27,8 @@ import {
   recordRequest,
   speedLabel,
   state,
+  usage,
+  weeklySpentUsd,
 } from './state';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8787';
@@ -47,36 +49,42 @@ const sliderOf = (v: unknown): SliderPreset => (v === 'cheapest' || v === 'best'
 
 export const handlers = [
   /* ---------------------------------- auth --------------------------------- */
-  http.post(url('/auth/challenge'), async ({ request }) => {
-    const { address, origin } = await body<{ address?: string; origin?: string }>(request);
-    if (!address) return error(400, 'VALIDATION_FAILED', 'address is required');
-    const host = origin ? new URL(origin).host : 'localhost';
-    const message = `${host} wants you to sign in with your Tempo account:\n${address}\n\nSign in to SmartRouter\n\nURI: ${origin ?? 'http://localhost'}\nVersion: 1\nChain ID: 42431\nNonce: ${nextId('nonce')}\nIssued At: ${new Date().toISOString()}`;
-    return HttpResponse.json({ message });
-  }),
-  http.post(url('/auth/verify'), async ({ request }) => {
-    const { message, signature } = await body<{ message?: string; signature?: string }>(request);
-    if (!message || !signature) return error(400, 'VALIDATION_FAILED', 'message and signature are required');
+  http.post(url('/auth/privy'), async ({ request }) => {
+    const { identityToken } = await body<{ identityToken?: string }>(request);
+    const token = identityToken ?? request.headers.get('privy-id-token');
+    if (!token) return error(400, 'VALIDATION_FAILED', 'Send { identityToken } from Privy');
+    if (token === 'forged') return error(401, 'UNAUTHENTICATED', 'Privy token rejected: invalid signature');
     await delay(200);
     state.authed = true;
-    return HttpResponse.json({ ok: true, address: state.user.address }, { headers: { 'Set-Cookie': 'sr_session=mock; Path=/; HttpOnly; SameSite=Lax' } });
+    return HttpResponse.json(
+      { userId: 'user_mock', address: state.user.address, email: 'demo@smartrouter.dev', loginMethod: 'email', token: 'user_mock.0.mocksig', expiresAt: new Date(Date.now() + 7 * 24 * 3600_000).toISOString() },
+      { headers: { 'Set-Cookie': 'sr_session=mock; Path=/; HttpOnly; SameSite=Lax' } },
+    );
   }),
   http.post(url('/auth/logout'), () => {
     state.authed = false;
-    return new HttpResponse(null, { status: 204 });
+    return HttpResponse.json({ ok: true });
   }),
 
   /* ----------------------------------- me ---------------------------------- */
-  http.get(url('/me'), () => guard() ?? HttpResponse.json({ ...state.user, freeRemaining: Math.max(0, FREE_LIMIT - state.freeUsed) })),
+  http.get(url('/me'), () => {
+    const g = guard();
+    if (g) return g;
+    const { address, ...settings } = state.user;
+    return HttpResponse.json({ id: 'user_mock', address, email: 'demo@smartrouter.dev', loginMethod: 'email', country: null, usage: usage(), settings, freeRemainingToday: Math.max(0, FREE_LIMIT - state.freeUsed) });
+  }),
   http.patch(url('/me/settings'), async ({ request }) => {
     const g = guard();
     if (g) return g;
     const patch = await body<{ slider?: SliderPreset; allocationUsd?: number; weeklyLimitUsd?: number; autoFreeFallback?: boolean }>(request);
+    if (typeof patch.allocationUsd === 'number' && (patch.allocationUsd < 0.5 || patch.allocationUsd > 100)) return error(400, 'VALIDATION_FAILED', 'allocationUsd must be 0.5–100');
+    if (typeof patch.weeklyLimitUsd === 'number' && (patch.weeklyLimitUsd < 0 || patch.weeklyLimitUsd > 1000)) return error(400, 'VALIDATION_FAILED', 'weeklyLimitUsd must be 0–1000');
     if (patch.slider) state.user.slider = sliderOf(patch.slider);
-    if (typeof patch.allocationUsd === 'number') state.user.allocationUsd = Math.min(50, Math.max(1, patch.allocationUsd));
-    if (typeof patch.weeklyLimitUsd === 'number') state.user.weeklyLimitUsd = Math.min(500, Math.max(5, patch.weeklyLimitUsd));
+    if (typeof patch.allocationUsd === 'number') state.user.allocationUsd = patch.allocationUsd;
+    if (typeof patch.weeklyLimitUsd === 'number') state.user.weeklyLimitUsd = patch.weeklyLimitUsd;
     if (typeof patch.autoFreeFallback === 'boolean') state.user.autoFreeFallback = patch.autoFreeFallback;
-    return HttpResponse.json({ ...state.user, freeRemaining: Math.max(0, FREE_LIMIT - state.freeUsed) });
+    const { address: _address, ...settings } = state.user;
+    return HttpResponse.json({ ...settings, country: null });
   }),
 
   /* -------------------------------- catalogue ------------------------------- */
@@ -87,14 +95,15 @@ export const handlers = [
       models: list.map((m) => ({ modelId: m.modelId, label: m.label, provider: m.provider, taskTypes: m.taskTypes, priceUsd: m.priceUsd, quality: Math.max(...Object.values(m.quality)), speed: speedLabel(m.latency), free: m.free })),
     });
   }),
+  // Works signed out (Handover "Guest mode"): `guest: true` and nothing to pay against (`quoteId: null`).
   http.post(url('/recommend'), async ({ request }) => {
-    const g = guard();
-    if (g) return g;
+    const guest = !request.headers.get('x-session-token') || !state.authed;
     const { prompt, slider, taskType } = await body<{ prompt?: string; slider?: SliderPreset; taskType?: TaskType }>(request);
     if (!prompt) return error(400, 'VALIDATION_FAILED', 'prompt is required');
     const task = taskType ?? classify(prompt);
     await delay(150);
-    return HttpResponse.json({ taskType: task, options: optionsFor(task, sliderOf(slider ?? state.user.slider), prompt, null) });
+    const options = optionsFor(task, sliderOf(slider ?? state.user.slider), prompt, null).map((o) => (guest ? { ...o, quoteId: null, expiresAt: null } : o));
+    return HttpResponse.json({ taskType: task, options, freeRemainingToday: Math.max(0, FREE_LIMIT - state.freeUsed), guest });
   }),
 
   /* ---------------------------------- chats -------------------------------- */
@@ -111,7 +120,7 @@ export const handlers = [
     const chat = createChat(input);
     await delay(150);
     const options = input.description ? optionsFor(chat.taskType, sliderOf(input.slider ?? state.user.slider), input.description, chat.id) : [];
-    return HttpResponse.json({ chatId: chat.id, taskType: chat.taskType, title: chat.title, options }, { status: 201 });
+    return HttpResponse.json({ chatId: chat.id, taskType: chat.taskType, title: chat.title, options, freeRemainingToday: Math.max(0, FREE_LIMIT - state.freeUsed) }, { status: 201 });
   }),
   http.get(url('/chats/:id'), ({ params }) => {
     const g = guard();
@@ -161,19 +170,15 @@ export const handlers = [
     const g = guard();
     if (g) return g;
     const s = state.session;
-    return HttpResponse.json({ suggestedDepositUsd: state.user.allocationUsd, network: 'moderato', session: s ? { depositUsd: s.depositUsd, spentUsd: s.spentUsd, remainingUsd: s.remainingUsd, requests: s.requests, channelId: s.channelId, status: s.status, openedAt: s.openedAt } : null });
+    return HttpResponse.json({
+      paidRunsEnabled: true,
+      network: { chainId: 42431, token: '0x20c0000000000000000000000000000000000000', recipient: '0x00000000000000000000000000000000000000aa', operator: '0x00000000000000000000000000000000000000bb' },
+      suggestedDepositUsd: Math.max(2, state.user.allocationUsd),
+      usage: usage(),
+      session: s ? { channelId: s.channelId, depositUsd: s.depositUsd, spentUsd: s.spentUsd, remainingUsd: s.remainingUsd, settledUsd: 0, requests: s.requests, openedAt: s.openedAt, lastUsedAt: s.openedAt } : null,
+    });
   }),
-  // Mock-only stand-ins for what the mppx manager does on-chain (`manager.topUp`, `manager.close`).
-  http.post(url('/mock/session/top-up'), async ({ request }) => {
-    const { amountUsd } = await body<{ amountUsd?: string | number }>(request);
-    const amount = Number(amountUsd ?? state.user.allocationUsd) || state.user.allocationUsd;
-    await delay(400);
-    const s = state.session ?? openSession(0);
-    s.status = 'open';
-    s.depositUsd = Math.round((s.depositUsd + amount) * 1e6) / 1e6;
-    s.remainingUsd = Math.round((s.depositUsd - s.spentUsd) * 1e6) / 1e6;
-    return HttpResponse.json({ ok: true });
-  }),
+  // Mock-only stand-in for what the mppx manager does on-chain (`manager.close`).
   http.post(url('/mock/session/close'), async () => {
     await delay(300);
     if (state.session) state.session.status = 'closed';
@@ -239,7 +244,10 @@ export const handlers = [
     if (quote.free) {
       if (state.freeUsed >= FREE_LIMIT) return error(429, 'FREE_LIMIT_REACHED', 'Free messages reset at 00:00 UTC', { scope: 'user' });
     } else {
-      if (!state.session || state.session.status === 'closed') openSession(state.user.allocationUsd);
+      if (weeklySpentUsd() + quote.priceUsd > state.user.weeklyLimitUsd) {
+        return error(402, 'ALLOCATION_EXHAUSTED', `This would pass your weekly limit of $${state.user.weeklyLimitUsd.toFixed(2)}. Raise it in settings or continue free.`, { reason: 'weekly_limit', freeFallback: { available: state.freeUsed < FREE_LIMIT, modelId: FREE_MODEL_ID, freeRemainingToday: Math.max(0, FREE_LIMIT - state.freeUsed) } });
+      }
+      if (!state.session || state.session.status === 'closed') openSession(Math.max(2, state.user.allocationUsd));
       const s = state.session;
       if (s && s.remainingUsd < quote.priceUsd) {
         return error(402, 'ALLOCATION_EXHAUSTED', 'Your allocation is used up', { freeFallback: { available: state.freeUsed < FREE_LIMIT, remaining: Math.max(0, FREE_LIMIT - state.freeUsed), modelId: FREE_MODEL_ID } });
@@ -261,7 +269,7 @@ export const handlers = [
     const started = Date.now();
 
     const events: SseEvent[] = [
-      { event: 'meta', data: { requestId, modelId: model.modelId, label: model.label, priceUsd: quote.priceUsd, free: quote.free, chatId: chat.id, userMessageId: userMsg.id, assistantMessageId: asstMsg.id, remainingUsd: state.session?.remainingUsd ?? null }, delay: 120 },
+      { event: 'meta', data: { requestId, modelId: model.modelId, label: model.label, priceUsd: quote.priceUsd, free: quote.free, chatId: chat.id, userMessageId: userMsg.id, assistantMessageId: asstMsg.id, ...(quote.free ? {} : { remainingUsd: state.session?.remainingUsd ?? null, usage: usage() }) }, delay: 120 },
       { event: 'heartbeat', data: null, delay: 200 },
     ];
 
@@ -303,7 +311,7 @@ export const handlers = [
         chat.spentUsd = Math.round((chat.spentUsd + charged) * 1e6) / 1e6;
         if (!quote.free) charge(charged);
         recordRequest({ requestId, status: 'succeeded', modelId: answerModel.modelId, label: answerModel.label, chatId: chat.id, chargedUsd: charged, refundedUsd: null, latencyMs: Date.now() - started, text: reply, files, error: null, free: quote.free, compareGroup: compareGroup ?? null });
-        return { requestId, modelId: answerModel.modelId, text: reply, files, citations: [], chargedUsd: charged, latencyMs: Date.now() - started };
+        return { requestId, modelId: answerModel.modelId, text: reply, files, citations: [], chargedUsd: charged, latencyMs: Date.now() - started, usage: usage() };
       },
       delay: 150,
     });

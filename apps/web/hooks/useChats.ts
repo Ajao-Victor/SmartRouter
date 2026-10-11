@@ -6,11 +6,15 @@ import { api } from '@/lib/api/endpoints';
 import { queryKeys } from '@/lib/api/keys';
 import type { Chat, ChatList, CreateChatInput, CreateChatResponse } from '@/lib/api/types';
 
-/** Recent chats (`GET /chats?cursor=`; first page). */
+import { selectIsSignedIn, useAuthStore } from '@/stores/authStore';
+
+/** Recent chats (`GET /chats?cursor=`; first page). Signed in only. */
 export function useChats() {
+  const signedIn = useAuthStore(selectIsSignedIn);
   return useQuery({
     queryKey: queryKeys.chats(),
     queryFn: ({ signal }) => api.chats.list(null, signal),
+    enabled: signedIn,
   });
 }
 

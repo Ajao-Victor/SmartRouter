@@ -7,7 +7,9 @@ import { useRouter } from 'next/navigation';
 import { isApiError } from '@/lib/api/client';
 import { api } from '@/lib/api/endpoints';
 import { describeAction, toUiAction } from '@/lib/api/errors';
-import type { Option, Quote, SliderPreset } from '@/lib/api/types';
+import { FREE_MODEL_ID, type Option, type Quote, type SliderPreset } from '@/lib/api/types';
+import { logoutPrivy, openSignIn } from '@/lib/auth/session';
+import { signOutEverywhere } from '@/lib/auth/signIn';
 import { formatUsd } from '@/lib/money';
 
 import { useChat, useChatCache } from '@/hooks/useChat';
@@ -17,15 +19,15 @@ import { useModelLabel } from '@/hooks/useModelLabel';
 import { usePending } from '@/hooks/usePending';
 import { isQuoteExpired } from '@/hooks/useQuote';
 import { useRun } from '@/hooks/useRun';
-import { useTopUp } from '@/hooks/useTopUp';
-import { useAllocationStore } from '@/stores/allocationStore';
+import { selectNextDeposit, useAllocationStore } from '@/stores/allocationStore';
+import { useAuthStore } from '@/stores/authStore';
 import { useComposerStore } from '@/stores/composerStore';
 import { useStreamStore } from '@/stores/streamStore';
 import { toast } from '@/stores/toastStore';
 import { useUiStore } from '@/stores/uiStore';
 
-import { LowBalanceBanner } from '@/components/allocation/LowBalanceBanner';
 import { TopUpBar } from '@/components/allocation/TopUpBar';
+import { UsageBanner } from '@/components/allocation/UsageBanner';
 import { CompareSplit } from '@/components/chat/CompareSplit';
 import { Composer } from '@/components/chat/Composer';
 import { ModelOptions } from '@/components/chat/ModelOptions';
@@ -63,7 +65,6 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
   const me = useMe();
   const chat = useChat(chatId);
   const runner = useRun(chatId);
-  const topUp = useTopUp();
   const cache = useChatCache(chatId);
   const compareVote = useCompareVote();
   usePending(chatId);
@@ -81,7 +82,10 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
   const pendingOptions = useComposerStore((s) => s.pendingOptions);
   const setPendingOptions = useComposerStore((s) => s.setPendingOptions);
   const streamEntries = useStreamStore((s) => s.byMessageId);
-  const suggestedDeposit = useAllocationStore((s) => s.suggestedDepositUsd);
+  const nextDeposit = useAllocationStore(selectNextDeposit);
+  const paidRunsEnabled = useAllocationStore((s) => s.paidRunsEnabled);
+  const toppingUp = useAllocationStore((s) => s.status === 'toppingUp');
+  const openDeposit = useUiStore((s) => s.openDeposit);
 
   const [held, setHeld] = useState<HeldQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
@@ -89,10 +93,12 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
 
   const slider: SliderPreset = sliderOverride ?? me.data?.slider ?? chat.data?.slider ?? 'balanced';
   const autoFree = me.data?.autoFreeFallback ?? true;
-  const currentModelId = selectedModelId ?? chat.data?.currentModelId ?? null;
+  // Handover: `paidRunsEnabled: false` → hide paid models; quote the free model by default.
+  const currentModelId = selectedModelId ?? chat.data?.currentModelId ?? (paidRunsEnabled ? null : FREE_MODEL_ID);
   const currentModel = useModelLabel(currentModelId, held?.quote.label);
   const prompt = draft.trim();
-  const options = pendingOptions?.chatId === chatId ? pendingOptions : null;
+  const rawOptions = pendingOptions?.chatId === chatId ? pendingOptions : null;
+  const options = rawOptions && !paidRunsEnabled ? { ...rawOptions, options: rawOptions.options.filter((o) => o.free) } : rawOptions;
   const quoteFresh = held !== null && held.prompt === prompt && held.modelId === currentModelId && !isQuoteExpired(held.quote.expiresAt);
   const freshQuote = quoteFresh ? held.quote : null;
 
@@ -120,14 +126,18 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
         if (seq !== quoteSeq.current) return null;
         const action = toUiAction(err);
         if (action.kind === 'cooldown') runner.bumpCooldown();
-        else if (action.kind === 'sign_in') router.replace('/');
+        // 401: the API helper dropped the token and opened sign-in; send this once signed in.
+        else if (action.kind === 'sign_in') useAuthStore.getState().setAfterSignIn(() => { sendRef.current(p); });
+        else if (action.kind === 'wrong_wallet') void reauth();
         else if (action.kind !== 'offline') toast.error('Could not get a price', describeAction(action));
         return null;
       } finally {
         if (seq === quoteSeq.current) setQuoting(false);
       }
     },
-    [chatId, router, runner],
+    // reauth/sendRef are stable (ref + module functions).
+     
+    [chatId, runner],
   );
 
   // Quote the draft while the user pauses typing so the Send button always shows the price.
@@ -146,14 +156,35 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
       if (result === 'started') {
         setHeld(null);
         setPendingOptions(null);
+      } else if (result === 'ignored') {
+        // QUOTE_USED: that quote already ran; the next Send gets a new one.
+        setHeld(null);
       } else if (result === 'needs_requote') {
+        // QUOTE_EXPIRED / VALIDATION_FAILED: re-quote silently and run.
         void fetchQuote(p, q.modelId).then((fresh) => {
           if (!fresh) return;
-          if (fresh.priceUsd !== q.priceUsd && !fresh.free) toast.info(`The price changed to ${formatUsd(fresh.priceUsd)}`, 'Press Send to confirm.');
-          else void runner.run({ prompt: p, quote: fresh, label: fresh.label, autoFreeFallback: autoFree }).then((r) => { afterRun(r, p, fresh); });
+          void runner.run({ prompt: p, quote: fresh, label: fresh.label, autoFreeFallback: autoFree }).then((r) => {
+            if (r !== 'needs_requote') afterRun(r, p, fresh);
+          });
         });
+      } else if (result === 'needs_sign_in') {
+        // Keep the message, open sign-in, send once signed in.
+        useComposerStore.getState().setDraft(p);
+        useAuthStore.getState().setAfterSignIn(() => { sendRef.current(p); });
+        openSignIn();
+      } else if (result === 'needs_reauth') {
+        void reauth();
+      } else if (result === 'rate_limited') {
+        // Wait for Retry-After seconds, then retry with a fresh quote.
+        window.setTimeout(() => {
+          void fetchQuote(p, q.modelId).then((fresh) => {
+            if (fresh) void runner.run({ prompt: p, quote: fresh, label: fresh.label, autoFreeFallback: autoFree }).then((r) => { afterRun(r, p, fresh); });
+          });
+        }, runner.retryAfterSeconds() * 1000);
       }
     },
+    // reauth/sendRef are stable (ref + module functions).
+     
     [autoFree, fetchQuote, runner, setPendingOptions],
   );
 
@@ -188,6 +219,12 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
   );
 
   const onSend = (p: string) => {
+    if (useAuthStore.getState().status !== 'signed_in') {
+      useComposerStore.getState().setDraft(p);
+      useAuthStore.getState().setAfterSignIn(() => { sendRef.current(p); });
+      openSignIn();
+      return;
+    }
     if (compareMode) {
       void startCompare(p);
       return;
@@ -206,6 +243,45 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
       void runWithQuote(p, q);
     });
   };
+
+  const sendRef = useRef<(p: string) => void>(() => undefined);
+  sendRef.current = onSend;
+
+  /** FORBIDDEN: wallet belongs to another account / deposit from a different wallet → sign out and back in. */
+  const reauth = async () => {
+    await signOutEverywhere(logoutPrivy);
+    const { resetSession } = await import('@/lib/tempo/session');
+    resetSession();
+    useAuthStore.getState().signedOut();
+    openSignIn();
+  };
+
+  // A guest's message kept through sign-in: send it as soon as the chat opens.
+  useEffect(() => {
+    const auto = useComposerStore.getState().takeAutoRun(chatId);
+    if (!auto) return;
+    if (auto.modelId) selectModel(auto.modelId);
+    void fetchQuote(auto.prompt, auto.modelId).then((q) => {
+      if (q) void runWithQuote(auto.prompt, q);
+      else useComposerStore.getState().setDraft(auto.prompt);
+    });
+    // Run once per chat.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
+
+  // The deposit ran out (mppx "exceeds local maxDeposit", or a 402): keep the message, open the
+  // deposit dialog, and send the message once the new deposit is set up.
+  const needsTopUpNow = runner.needsTopUp;
+  useEffect(() => {
+    if (needsTopUpNow?.reason !== 'deposit') return;
+    const prompt = needsTopUpNow.prompt;
+    openDeposit(() => {
+      runner.clearNeedsTopUp();
+      sendRef.current(prompt);
+    });
+    // Only when a new needs-top-up arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsTopUpNow]);
 
   const onPickOption = (o: Option) => {
     if (!options) return;
@@ -235,14 +311,6 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
     api.chats.update(chatId, { currentModelId: modelId }).catch(() => undefined);
   };
 
-  const onTopUp = (then?: () => void) => {
-    topUp.mutate(suggestedDeposit, {
-      onSuccess: () => {
-        runner.clearNeedsTopUp();
-        then?.();
-      },
-    });
-  };
 
   const pair = runner.compare;
   const leftMsg = pair ? (chat.data?.messages.find((m) => m.id === pair.leftMessageId) ?? null) : null;
@@ -284,7 +352,7 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
 
   const messages = chat.data.messages;
   const needsTopUp = runner.needsTopUp;
-  const weeklyLimit = (needsTopUp?.freeFallback as { reason?: string } | undefined)?.reason === 'weekly_limit';
+  const weeklyLimit = needsTopUp?.reason === 'weekly_limit';
 
   return (
     <div className="flex min-h-[calc(100dvh-9rem)] flex-col">
@@ -328,18 +396,20 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
 
           {needsTopUp && (
             <TopUpBar
-              topUpUsd={suggestedDeposit}
-              toppingUp={topUp.isPending}
+              topUpUsd={nextDeposit}
+              toppingUp={toppingUp}
               freeAvailable={needsTopUp.freeFallback.available}
               freeRemaining={needsTopUp.freeFallback.remaining}
               reason={weeklyLimit ? 'weekly_limit' : 'allocation'}
               onTopUp={() => {
-                onTopUp(() => {
-                  useComposerStore.getState().setDraft(needsTopUp.prompt);
-                  void fetchQuote(needsTopUp.prompt, currentModelId).then((q) => {
-                    if (q) void runWithQuote(needsTopUp.prompt, q);
-                  });
+                const prompt = needsTopUp.prompt;
+                openDeposit(() => {
+                  runner.clearNeedsTopUp();
+                  sendRef.current(prompt);
                 });
+              }}
+              onRaiseLimit={() => {
+                router.push('/settings#limits');
               }}
               onContinueFree={() => {
                 runner.clearNeedsTopUp();
@@ -351,11 +421,16 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
       </div>
 
       <div className="sticky bottom-0 z-content -mx-4 space-y-2 bg-bg-0/95 px-4 pt-2 pb-[max(12px,env(safe-area-inset-bottom))] backdrop-blur-sm">
-        <LowBalanceBanner
-          nextPriceUsd={freshQuote && !freshQuote.free ? freshQuote.priceUsd : null}
-          toppingUp={topUp.isPending}
+        <UsageBanner
           onTopUp={() => {
-            onTopUp();
+            openDeposit(prompt ? () => { sendRef.current(prompt); } : null);
+          }}
+          onRaiseLimit={() => {
+            router.push('/settings#limits');
+          }}
+          onUseFree={() => {
+            if (prompt) void runner.runFree(prompt);
+            else onSelectModel(FREE_MODEL_ID);
           }}
         />
         <Composer

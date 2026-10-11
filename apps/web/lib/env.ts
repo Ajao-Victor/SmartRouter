@@ -3,8 +3,9 @@ import { z } from 'zod';
 /**
  * Public runtime config (SmartRouter Frontend Architecture, "Vercel environment variables").
  *
- * The browser needs exactly four public values to reach the live backend and the user's wallet:
- * the API base URL, the Tempo network, its chain id and a public RPC URL. Everything else here
+ * The browser needs exactly five public values (SmartRouter Frontend Handover, "Environments and
+ * config"): the API base URL, the Tempo network, its chain id, a public RPC URL and the Privy app
+ * id. The frontend needs no secrets at all. Everything else here
  * is optional tooling (Sentry, feature flags, the offline mock switch for development and tests).
  * Provider keys, the hot wallet and the operator key never exist in this bundle.
  *
@@ -28,6 +29,8 @@ const schema = z
     network: z.enum(['tempo', 'moderato']),
     chainId: z.coerce.number().int().positive().optional(),
     rpcUrl: z.string().url().optional(),
+    /** Handover: the same Privy app for testnet and mainnet. Public — never the app secret. */
+    privyAppId: z.string().min(1),
     objectStorageHost: z.string().optional().transform((s) => s ?? ''),
     sentryDsn: z.string().optional().transform((s) => s ?? ''),
     flagCompare: booleanFlag,
@@ -47,6 +50,7 @@ const raw = {
   network: process.env.NEXT_PUBLIC_TEMPO_NETWORK,
   chainId: process.env.NEXT_PUBLIC_CHAIN_ID,
   rpcUrl: process.env.NEXT_PUBLIC_RPC_URL,
+  privyAppId: process.env.NEXT_PUBLIC_PRIVY_APP_ID,
   objectStorageHost: process.env.NEXT_PUBLIC_OBJECT_STORAGE_HOST,
   sentryDsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
   flagCompare: process.env.NEXT_PUBLIC_FLAG_COMPARE ?? '1',

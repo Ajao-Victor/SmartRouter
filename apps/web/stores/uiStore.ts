@@ -3,7 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { idbStateStorage } from '@/lib/idb';
 
-export type DialogId = 'modelPicker' | 'waitlist';
+export type DialogId = 'modelPicker' | 'waitlist' | 'deposit';
 export type Theme = 'dark' | 'light';
 
 export interface UiState {
@@ -22,6 +22,11 @@ export interface UiState {
   receiptRequestId: string | null;
   /** Title shown in the TopBar (chat title). */
   pageTitle: string | null;
+  /**
+   * Deposit dialog (Handover "top_up"): the message kept when the deposit ran out, sent again
+   * once the new deposit is set up.
+   */
+  depositResend: (() => void) | null;
 }
 
 export interface UiActions {
@@ -36,6 +41,8 @@ export interface UiActions {
   openReceipt: (requestId: string) => void;
   closeReceipt: () => void;
   setPageTitle: (title: string | null) => void;
+  /** Open the deposit dialog; `resend` runs after the close-and-reopen succeeds. */
+  openDeposit: (resend?: (() => void) | null) => void;
   reset: () => void;
 }
 
@@ -49,6 +56,7 @@ const initialState: UiState = {
   hydrated: false,
   receiptRequestId: null,
   pageTitle: null,
+  depositResend: null,
 };
 
 /**
@@ -64,7 +72,7 @@ export const useUiStore = create<UiState & UiActions>()(
         set({ activeDialog: id });
       },
       closeDialog: () => {
-        set({ activeDialog: null });
+        set({ activeDialog: null, depositResend: null });
       },
       toggleWallet: (open) => {
         set((s) => ({ walletSheetOpen: open ?? !s.walletSheetOpen }));
@@ -92,6 +100,9 @@ export const useUiStore = create<UiState & UiActions>()(
       },
       setPageTitle: (pageTitle) => {
         set({ pageTitle });
+      },
+      openDeposit: (resend = null) => {
+        set({ activeDialog: 'deposit', depositResend: resend, walletSheetOpen: false });
       },
       reset: () => {
         // Preferences survive logout; transient UI resets.

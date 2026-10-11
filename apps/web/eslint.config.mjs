@@ -72,7 +72,7 @@ export default defineConfig(
   },
   {
     // No automatic top-ups, ever (PDF). Timers may not call session code.
-    files: ['lib/tempo/session.ts', 'hooks/useTopUp.ts', 'hooks/useCloseSession.ts'],
+    files: ['lib/tempo/session.ts', 'hooks/useDeposit.ts', 'hooks/useCloseSession.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',

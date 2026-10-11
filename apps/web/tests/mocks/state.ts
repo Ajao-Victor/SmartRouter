@@ -332,3 +332,43 @@ function seedDemoChat(): void {
 }
 
 seedDemoChat();
+
+/* ----------------------------------- usage ---------------------------------- */
+
+/** Paid spend in the last 7 days (the weekly meter). */
+export function weeklySpentUsd(): number {
+  const since = Date.now() - 7 * 24 * 3600_000;
+  let total = 0;
+  for (const r of state.requests.values()) if (!r.free && r.status !== 'failed' && Date.parse(r.createdAt) > since) total += r.chargedUsd;
+  return Math.round(total * 1e6) / 1e6;
+}
+
+const pctOf = (part: number, whole: number) => (whole > 0 ? Math.min(100, Math.floor((part / whole) * 100)) : 0);
+
+/** The backend's usage object (Handover "Usage banners"): two meters, alert at 75/90/100%. */
+export function usage() {
+  const spent = weeklySpentUsd();
+  const weekly = { spentUsd: spent, limitUsd: state.user.weeklyLimitUsd, usedPct: pctOf(spent, state.user.weeklyLimitUsd) };
+  const s = state.session && state.session.status === 'open' ? state.session : null;
+  const deposit = s ? { channelId: s.channelId, depositUsd: s.depositUsd, spentUsd: s.spentUsd, remainingUsd: s.remainingUsd, usedPct: pctOf(s.spentUsd, s.depositUsd) } : null;
+  const top = [{ meter: 'weekly' as const, usedPct: weekly.usedPct }, ...(deposit ? [{ meter: 'deposit' as const, usedPct: deposit.usedPct }] : [])].sort((a, b) => b.usedPct - a.usedPct)[0];
+  const level = !top ? null : top.usedPct >= 100 ? 'exhausted' : top.usedPct >= 90 ? 'critical' : top.usedPct >= 75 ? 'warning' : null;
+  const alert =
+    top && level
+      ? {
+          level,
+          meter: top.meter,
+          usedPct: top.usedPct,
+          action: top.meter === 'deposit' ? 'top_up' : 'raise_limit',
+          message:
+            top.meter === 'deposit'
+              ? level === 'exhausted'
+                ? 'Your balance is used up'
+                : `You've used ${String(top.usedPct)}% of your balance`
+              : level === 'exhausted'
+                ? "You've reached your weekly limit"
+                : `You've used ${String(top.usedPct)}% of your weekly limit`,
+        }
+      : null;
+  return { weekly, deposit, alert };
+}

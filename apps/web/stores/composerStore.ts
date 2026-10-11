@@ -9,6 +9,13 @@ export interface PendingOptions {
   options: Option[];
 }
 
+/** A guest's message kept through sign-in, sent automatically once the chat exists (Handover "Guest mode"). */
+export interface AutoRun {
+  chatId: string;
+  prompt: string;
+  modelId: string | null;
+}
+
 export interface ComposerState {
   draft: string;
   /** New-chat category (PDF: chat, writing, coding, research, translation, image, music). */
@@ -20,6 +27,7 @@ export interface ComposerState {
   /** Compare mode picks (feature-flagged). */
   compareModelIds: [string | null, string | null];
   pendingOptions: PendingOptions | null;
+  autoRun: AutoRun | null;
 }
 
 export interface ComposerActions {
@@ -30,6 +38,9 @@ export interface ComposerActions {
   setCompareModel: (slot: 0 | 1, modelId: string | null) => void;
   clearCompare: () => void;
   setPendingOptions: (pending: PendingOptions | null) => void;
+  setAutoRun: (run: AutoRun | null) => void;
+  /** Take (and clear) the auto-run for this chat, if any. */
+  takeAutoRun: (chatId: string) => AutoRun | null;
   reset: () => void;
 }
 
@@ -40,10 +51,11 @@ const initialState: ComposerState = {
   selectedModelId: null,
   compareModelIds: [null, null],
   pendingOptions: null,
+  autoRun: null,
 };
 
 /** Composer state: draft and routing choices for the next turn. In-memory only. */
-export const useComposerStore = create<ComposerState & ComposerActions>()((set) => ({
+export const useComposerStore = create<ComposerState & ComposerActions>()((set, get) => ({
   ...initialState,
   setDraft: (draft) => {
     set({ draft });
@@ -69,6 +81,15 @@ export const useComposerStore = create<ComposerState & ComposerActions>()((set) 
   },
   setPendingOptions: (pendingOptions) => {
     set({ pendingOptions });
+  },
+  setAutoRun: (autoRun) => {
+    set({ autoRun });
+  },
+  takeAutoRun: (chatId) => {
+    const run = get().autoRun;
+    if (run?.chatId !== chatId) return null;
+    set({ autoRun: null });
+    return run;
   },
   reset: () => {
     set(initialState);
