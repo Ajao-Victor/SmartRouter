@@ -1,14 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-
 import dynamic from 'next/dynamic';
 
 import { clsx } from 'clsx';
-import { motion } from 'motion/react';
-
-import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';
-import { tokenBatch, withReduced } from '@/lib/motion/variants';
 
 import { selectEntry, useStreamStore } from '@/stores/streamStore';
 
@@ -26,63 +20,26 @@ export interface StreamTextProps {
 }
 
 /**
- * Token renderer: plain text with a caret while streaming (batches flushed per animation frame,
- * each batch micro-animates in), then sanitised markdown once done.
+ * Answer text: plain text with a caret while `delta` events arrive, sanitised markdown once
+ * `done`. No per-token animation — the text simply grows, which reads best at speed.
  */
 export function StreamText({ messageId, content, className }: StreamTextProps) {
-  const reduced = useReducedMotionSafe();
   const entry = useStreamStore(selectEntry(messageId));
-  const [shown, setShown] = useState<{ head: string; tail: string }>({ head: '', tail: '' });
-  const raf = useRef<number | null>(null);
-  const lastLen = useRef(0);
-
-  const live = entry && (entry.status === 'streaming' || entry.status === 'retrying');
-  const tokens = entry?.tokens;
-
-  useEffect(() => {
-    if (!tokens) return;
-    if (raf.current !== null) return;
-    raf.current = requestAnimationFrame(() => {
-      raf.current = null;
-      const all = tokens.join('');
-      const head = all.slice(0, lastLen.current);
-      const tail = all.slice(lastLen.current);
-      lastLen.current = all.length;
-      setShown({ head, tail });
-    });
-  }, [tokens]);
-
-  useEffect(
-    () => () => {
-      if (raf.current !== null) cancelAnimationFrame(raf.current);
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (entry?.status === 'retrying') {
-      lastLen.current = 0;
-      setShown({ head: '', tail: '' });
-    }
-  }, [entry?.status]);
+  const live = entry !== undefined && (entry.status === 'streaming' || entry.status === 'fallback');
 
   if (!live) {
-    const text = entry && entry.tokens.length > 0 ? entry.tokens.join('') : content;
+    const text = entry && entry.text.length > 0 ? entry.text : content;
+    if (!text) return null;
     return (
-      <div className={clsx('max-w-[68ch] text-base text-text-0', className)}>
+      <div className={clsx('prose-chat', className)}>
         <Markdown>{text}</Markdown>
       </div>
     );
   }
 
   return (
-    <p className={clsx('caret-stream max-w-[68ch] text-base leading-6 whitespace-pre-wrap text-text-0', className)} aria-live="polite" aria-busy="true">
-      {shown.head}
-      {shown.tail && (
-        <motion.span key={lastLen.current} variants={withReduced(tokenBatch, reduced)} initial="hidden" animate="visible" className="inline">
-          {shown.tail}
-        </motion.span>
-      )}
+    <p className={clsx('caret-stream max-w-[68ch] text-base leading-7 whitespace-pre-wrap text-text-0', className)} aria-live="polite" aria-busy="true">
+      {entry.text}
     </p>
   );
 }
