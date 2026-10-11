@@ -19,7 +19,7 @@ export interface ComposerQuote {
 }
 
 export interface ComposerProps {
-  /** Fresh quote for the current draft and model, if any — its price goes on the Send button (PDF). */
+  /** Fresh quote for the current draft and model, if any — its price is shown beside Send. */
   quote: ComposerQuote | null;
   quoting?: boolean;
   running?: boolean;
@@ -38,8 +38,8 @@ const COOLDOWN_MS = 10_000;
 
 /**
  * The composer: one quiet box at the bottom of the thread. Enter sends, Shift+Enter breaks a
- * line, the model control and the Compare toggle sit under the text, and the Send button shows
- * the quoted price ("Send · $0.003" / "Send · Free").
+ * line, the model control and the Compare toggle sit under the text, and the quoted price sits
+ * quietly beside the Send button (never on it).
  */
 export function Composer({
   quote,
@@ -87,7 +87,8 @@ export function Composer({
     onSend(prompt);
   };
 
-  const sendLabel = quote ? (quote.free ? 'Send · Free' : `Send · ${formatUsd(quote.priceUsd)}`) : quoting ? 'Send · …' : 'Send';
+  /** The quoted price sits beside the Send button as a caption, never on the button itself. */
+  const priceNote = quote ? (quote.free ? 'Free' : formatUsd(quote.priceUsd)) : quoting ? 'Pricing…' : null;
 
   return (
     <form
@@ -137,7 +138,13 @@ export function Composer({
           </button>
         )}
         <div className="flex-1" />
-        {coolingDown && <span className="mr-2 text-xs text-warn">Too many requests — one moment</span>}
+        {coolingDown ? (
+          <span className="mr-2 text-xs text-warn">Too many requests — one moment</span>
+        ) : priceNote && prompt.length > 0 && !running ? (
+          <span className={clsx('num mr-2 text-xs', quote?.free ? 'text-free' : 'text-text-2')} aria-live="polite">
+            {priceNote}
+          </span>
+        ) : null}
         {running ? (
           <button
             type="button"
@@ -151,13 +158,10 @@ export function Composer({
           <button
             type="submit"
             disabled={!canSend}
-            aria-label={sendLabel}
-            className={clsx(
-              'num inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40',
-              quote?.free ? 'bg-free/15 text-free hocus:bg-free/25' : 'bg-accent text-text-inverse hocus:bg-accent-hi',
-            )}
+            aria-label="Send"
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-accent px-3 text-sm font-medium text-text-inverse transition-colors hocus:bg-accent-hi disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {sendLabel}
+            Send
             <ArrowUp size={16} aria-hidden="true" />
           </button>
         )}
