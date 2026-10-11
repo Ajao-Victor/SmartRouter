@@ -35,13 +35,13 @@ export function ModelOptions({ options, selectedId = null, onPick, compareMode =
         <p className="text-sm font-medium text-text-0">{title}</p>
         {description && <p className="mt-0.5 text-xs text-text-2">{description}</p>}
       </header>
-      <ul className="space-y-0.5" role={compareMode ? 'group' : 'listbox'}>
+      <ul className="space-y-0.5" role={compareMode ? 'group' : 'listbox'} aria-label={title}>
         {options.map((o, i) => {
           const checked = compareIds.includes(o.modelId);
           const selected = selectedId === o.modelId;
           const badge = o.free ? 'Free' : o.bestQuality ? 'Best quality' : i === 0 ? 'Recommended' : null;
           return (
-            <li key={o.modelId}>
+            <li key={o.modelId} role="none">
               <button
                 type="button"
                 role={compareMode ? 'checkbox' : 'option'}
