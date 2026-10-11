@@ -14,4 +14,4 @@ export function getChainClient(): Client {
   return client;
 }
 
-export const explorerUrl = chain.blockExplorers?.default.url ?? 'https://explore.tempo.xyz';
+export const explorerUrl = chain.blockExplorers.default.url;

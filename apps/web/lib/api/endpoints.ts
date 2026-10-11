@@ -35,9 +35,9 @@ export const auth = {
   /** `POST /auth/challenge { address, origin }` → SIWE message for chain 4217/42431 with a nonce. */
   challenge: (input: ChallengeInput) => apiFetch('/auth/challenge', { method: 'POST', body: input, schema: challengeResponseSchema }),
   /** `POST /auth/verify { message, signature }` sets the `sr_session` cookie. */
-  verify: (input: VerifyInput) => apiFetch<unknown>('/auth/verify', { method: 'POST', body: input }),
+  verify: (input: VerifyInput) => apiFetch('/auth/verify', { method: 'POST', body: input }),
   /** `POST /auth/logout` clears the cookie. */
-  logout: () => apiFetch<unknown>('/auth/logout', { method: 'POST' }),
+  logout: () => apiFetch('/auth/logout', { method: 'POST' }),
 };
 
 export const me = {
@@ -69,7 +69,7 @@ export const chats = {
   update: (chatId: string, patch: ChatPatch) =>
     apiFetch(`/chats/${encodeURIComponent(chatId)}`, { method: 'PATCH', body: patch, schema: chatSchema }),
   /** `DELETE /chats/:id` (archive). */
-  remove: (chatId: string) => apiFetch<unknown>(`/chats/${encodeURIComponent(chatId)}`, { method: 'DELETE' }),
+  remove: (chatId: string) => apiFetch(`/chats/${encodeURIComponent(chatId)}`, { method: 'DELETE' }),
   /** `POST /chats/:id/quote { prompt, modelId? }` → `quoteId`, `priceUsd`, `free`, `expiresAt`, `suggestion?`. */
   quote: (chatId: string, input: QuoteInput, signal?: AbortSignal) =>
     apiFetch(`/chats/${encodeURIComponent(chatId)}/quote`, { method: 'POST', body: input, schema: quoteSchema, ...sig(signal) }),
@@ -103,14 +103,14 @@ export function pollPath(pollUrl: string): string {
 
 export const feedback = {
   /** `POST /feedback { requestId, rating: 1 | -1 }`. */
-  rate: (input: FeedbackInput) => apiFetch<unknown>('/feedback', { method: 'POST', body: input }),
+  rate: (input: FeedbackInput) => apiFetch('/feedback', { method: 'POST', body: input }),
   /** `POST /compare/vote { compareGroup, winnerRequestId, prompt }`. */
-  compareVote: (input: CompareVoteInput) => apiFetch<unknown>('/compare/vote', { method: 'POST', body: input }),
+  compareVote: (input: CompareVoteInput) => apiFetch('/compare/vote', { method: 'POST', body: input }),
 };
 
 export const waitlist = {
   /** `POST /waitlist { email, interest, country? }`. */
-  join: (input: WaitlistInput) => apiFetch<unknown>('/waitlist', { method: 'POST', body: input }),
+  join: (input: WaitlistInput) => apiFetch('/waitlist', { method: 'POST', body: input }),
 };
 
 /** `POST /run` lives in `lib/api/sse.ts` (SSE reader over fetch / the mppx session manager). */

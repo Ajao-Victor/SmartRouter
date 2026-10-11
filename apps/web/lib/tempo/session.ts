@@ -7,16 +7,15 @@
  */
 import { createJsonChannelStore, sessionManager } from 'mppx/client';
 
-export type SessionManager = ReturnType<typeof sessionManager>;
-
 import { ApiError } from '@/lib/api/client';
 import { env } from '@/lib/env';
 import { idb } from '@/lib/idb';
 import { toUsdString, type MicroUsd } from '@/lib/money';
 
+import type { AccessKeyAccount } from './accessKey';
 import { getChainClient } from './chain';
 
-import type { AccessKeyAccount } from './accessKey';
+export type SessionManager = ReturnType<typeof sessionManager>;
 
 const CHANNEL_PREFIX = 'sr:channel:';
 

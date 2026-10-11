@@ -22,9 +22,9 @@ export type UiErrorAction =
 
 export const DEFAULT_COOLDOWN_SECONDS = 10;
 
-function detail<T>(err: ApiError, key: string): T | undefined {
+function detail(err: ApiError, key: string): unknown {
   const d = err.details;
-  if (d && typeof d === 'object' && key in d) return (d as Record<string, T>)[key];
+  if (d && typeof d === 'object' && key in d) return (d as Record<string, unknown>)[key];
   return undefined;
 }
 
@@ -50,7 +50,7 @@ export function toUiAction(err: unknown): UiErrorAction {
     case 'RATE_LIMITED':
       return { kind: 'cooldown', seconds: Math.max(1, Math.round(err.retryAfter ?? DEFAULT_COOLDOWN_SECONDS)) };
     case 'FREE_LIMIT_REACHED':
-      return { kind: 'free_exhausted', scope: detail<string>(err, 'scope') === 'global' ? 'global' : 'user' };
+      return { kind: 'free_exhausted', scope: detail(err, 'scope') === 'global' ? 'global' : 'user' };
     case 'PROVIDER_UNAVAILABLE':
       return { kind: 'other_model' };
     case 'NOT_FOUND':
