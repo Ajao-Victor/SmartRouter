@@ -22,7 +22,7 @@ const components: Components = {
     </a>
   ),
   pre: ({ children }) => (
-    <pre className="scanline-once num my-3 overflow-x-auto rounded-md bg-bg-0/70 p-3 text-xs leading-5 text-text-0 shadow-hairline">
+    <pre className="num my-3 overflow-x-auto rounded-md bg-bg-0/70 p-3 text-xs leading-5 text-text-0 shadow-hairline">
       {children}
     </pre>
   ),
