@@ -1,4 +1,3 @@
-import { mockSessionOpen } from './fixtures';
 import { server } from './server';
 import { resetMockState, state } from './state';
 
@@ -15,81 +14,132 @@ afterAll(() => {
   server.close();
 });
 
+const json = (method: string, path: string, body?: unknown) =>
+  fetch(`${API}${path}`, { method, headers: { 'Content-Type': 'application/json' }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
+
 async function readSse(res: Response): Promise<{ event: string; data: unknown }[]> {
   const text = await res.text();
   return text
     .split('\n\n')
     .filter(Boolean)
     .map((block) => {
+      if (block.startsWith(':')) return { event: 'heartbeat', data: null };
       const ev = /event: (.*)/.exec(block)?.[1] ?? '';
       const data = /data: (.*)/.exec(block)?.[1] ?? '{}';
       return { event: ev, data: JSON.parse(data) as unknown };
     });
 }
 
-describe('mock API', () => {
-  it('quotes a writing prompt with four options and attribution-ready reasons', async () => {
-    const chat = (await (await fetch(`${API}/api/chats`, { method: 'POST', body: JSON.stringify({ first_prompt: 'Write a cover letter' }) })).json()) as { id: string };
-    const res = await fetch(`${API}/api/chats/${chat.id}/quote`, { method: 'POST', body: JSON.stringify({ prompt: 'Write a cover letter', slider: 'balanced' }) });
-    const q = (await res.json()) as { classification: { task_type: string }; recommendations: { is_free: boolean; is_best_quality: boolean; reason: string; price: number }[]; quote: { price: number; expires_at: string } };
-    expect(q.classification.task_type).toBe('writing');
-    expect(q.recommendations).toHaveLength(4);
-    expect(q.recommendations.filter((r) => r.is_free)).toHaveLength(1);
-    expect(q.recommendations.filter((r) => r.is_best_quality)).toHaveLength(1);
-    expect(q.recommendations[0]?.reason).toMatch(/% of the best quality at 1\/\d+ of the price/);
-    expect(q.quote.price % 100).toBe(0);
-    expect(Date.parse(q.quote.expires_at) - Date.now()).toBeGreaterThan(4 * 60_000);
+interface Opt { modelId: string; quoteId: string | null; priceUsd: number; free: boolean; bestQuality: boolean; reason: string; expiresAt: string | null }
+
+describe('mock API (live contract)', () => {
+  it('signs in via challenge + verify and serves /me', async () => {
+    resetMockState({ authed: false });
+    expect((await json('GET', '/me')).status).toBe(401);
+    const ch = (await (await json('POST', '/auth/challenge', { address: state.user.address, origin: 'http://localhost:3300' })).json()) as { message: string };
+    expect(ch.message).toMatch(/Chain ID: 42431/);
+    expect((await json('POST', '/auth/verify', { message: ch.message, signature: '0xsig' })).ok).toBe(true);
+    const me = (await (await json('GET', '/me')).json()) as { address: string; allocationUsd: number };
+    expect(me.address).toBe(state.user.address);
+    expect(me.allocationUsd).toBe(2);
   });
 
-  it('streams a paid run, records the voucher and settles on later polls', async () => {
-    const chat = (await (await fetch(`${API}/api/chats`, { method: 'POST', body: JSON.stringify({ first_prompt: 'Write a cover letter' }) })).json()) as { id: string };
-    await fetch(`${API}/api/chats/${chat.id}/quote`, { method: 'POST', body: JSON.stringify({ prompt: 'Write a cover letter' }) });
-    const q = (await (await fetch(`${API}/api/chats/${chat.id}/quote`, { method: 'POST', body: JSON.stringify({ prompt: 'Write a cover letter' }) })).json()) as { quote: { id: string; model_id: string; price: number } };
-    const res = await fetch(`${API}/run`, {
-      method: 'POST',
-      body: JSON.stringify({ quote_id: q.quote.id, chat_id: chat.id, model_id: q.quote.model_id, voucher: { channel_id: 'ch_demo_0001', cumulative_amount: q.quote.price, signature: '0xsig' } }),
-    });
+  it('POST /chats with a description returns quoted options: top 2 + best quality + free', async () => {
+    const res = await json('POST', '/chats', { description: 'Write a cover letter for a payments engineer role' });
+    expect(res.status).toBe(201);
+    const c = (await res.json()) as { chatId: string; taskType: string; options: Opt[] };
+    expect(c.taskType).toBe('writing');
+    expect(c.options).toHaveLength(4);
+    expect(c.options.filter((o) => o.free)).toHaveLength(1);
+    expect(c.options.filter((o) => o.bestQuality)).toHaveLength(1);
+    expect(c.options[0]?.reason).toMatch(/% of the best quality at 1\/\d+ of the price/);
+    for (const o of c.options) {
+      expect(o.quoteId).toMatch(/^q_/);
+      expect(Date.parse(o.expiresAt ?? '') - Date.now()).toBeGreaterThan(4 * 60_000);
+      expect(Math.round(o.priceUsd * 10_000)).toBe(o.priceUsd * 10_000);
+    }
+  });
+
+  it('streams a paid run with meta/heartbeat/delta/done, charges the session and records the request', async () => {
+    const c = (await (await json('POST', '/chats', { description: 'Write a cover letter' })).json()) as { chatId: string; options: Opt[] };
+    const paid = c.options.find((o) => !o.free);
+    expect(paid).toBeDefined();
+    const res = await json('POST', '/run', { quoteId: paid?.quoteId, prompt: 'Write a cover letter' });
     expect(res.headers.get('content-type')).toContain('text/event-stream');
     const events = await readSse(res);
     expect(events[0]?.event).toBe('meta');
-    expect(events.some((e) => e.event === 'token')).toBe(true);
     expect(events.some((e) => e.event === 'heartbeat')).toBe(true);
+    expect(events.some((e) => e.event === 'delta')).toBe(true);
     const done = events.at(-1);
     expect(done?.event).toBe('done');
-    const { request_id } = done?.data as { request_id: string };
-    expect(state.session?.highest_voucher).toBe(q.quote.price);
-    const first = (await (await fetch(`${API}/api/requests/${request_id}`)).json()) as { tx_hash: string | null };
-    expect(first.tx_hash).toBeNull();
-    const second = (await (await fetch(`${API}/api/requests/${request_id}`)).json()) as { tx_hash: string | null };
-    expect(second.tx_hash).toMatch(/^0x[0-9a-f]{64}$/);
+    const { requestId, chargedUsd } = done?.data as { requestId: string; chargedUsd: number };
+    expect(chargedUsd).toBe(paid?.priceUsd);
+    expect(state.session?.spentUsd).toBe(paid?.priceUsd);
+    const s = (await (await json('GET', '/sessions/current')).json()) as { session: { remainingUsd: number } | null; suggestedDepositUsd: number };
+    expect(s.suggestedDepositUsd).toBe(2);
+    expect(s.session?.remainingUsd).toBeCloseTo(2 - (paid?.priceUsd ?? 0), 6);
+    const r = (await (await json('GET', `/requests/${requestId}`)).json()) as { status: string; chargedUsd: number };
+    expect(r.status).toBe('succeeded');
+    expect(r.chargedUsd).toBe(paid?.priceUsd);
+    // Same quote cannot be reused.
+    expect((await json('POST', '/run', { quoteId: paid?.quoteId, prompt: 'Write a cover letter' })).status).toBe(409);
   }, 15_000);
 
-  it('rejects over-allocation and exhausted free quota per the PDF rules', async () => {
-    const open = mockSessionOpen();
-    resetMockState({ session: { ...open, highest_voucher: open.deposit }, freeMessages: 30 });
-    const chat = (await (await fetch(`${API}/api/chats`, { method: 'POST', body: JSON.stringify({ first_prompt: 'hello' }) })).json()) as { id: string };
-    const q = (await (await fetch(`${API}/api/chats/${chat.id}/quote`, { method: 'POST', body: JSON.stringify({ prompt: 'hello' }) })).json()) as { quote: { id: string; model_id: string; price: number } };
-    const paid = await fetch(`${API}/run`, { method: 'POST', body: JSON.stringify({ quote_id: q.quote.id, chat_id: chat.id, model_id: q.quote.model_id, voucher: { channel_id: 'x', cumulative_amount: 1, signature: 's' } }) });
-    expect(paid.status).toBe(402);
-    expect(((await paid.json()) as { code: string }).code).toBe('allocation_exceeded');
-    const free = await fetch(`${API}/run`, { method: 'POST', body: JSON.stringify({ quote_id: null, chat_id: chat.id, model_id: 'cloudflare:llama-3.1-8b' }) });
-    expect(free.status).toBe(402);
-    expect(((await free.json()) as { code: string }).code).toBe('free_quota_exhausted');
+  it('rejects a changed prompt, an exhausted allocation and the free limit with PDF codes', async () => {
+    const c = (await (await json('POST', '/chats', { description: 'hello there' })).json()) as { chatId: string; options: Opt[] };
+    const paid = c.options.find((o) => !o.free);
+    const changed = await json('POST', '/run', { quoteId: paid?.quoteId, prompt: 'hello there!' });
+    expect(changed.status).toBe(400);
+    expect(((await changed.json()) as { code: string }).code).toBe('VALIDATION_FAILED');
+
+    resetMockState({ session: { channelId: 'ch', depositUsd: 2, spentUsd: 2, remainingUsd: 0, requests: 3, status: 'open', openedAt: new Date().toISOString() }, freeUsed: 30 });
+    const c2 = (await (await json('POST', '/chats', { description: 'hello there' })).json()) as { chatId: string; options: Opt[] };
+    const paid2 = c2.options.find((o) => !o.free);
+    const exhausted = await json('POST', '/run', { quoteId: paid2?.quoteId, prompt: 'hello there' });
+    expect(exhausted.status).toBe(402);
+    const body = (await exhausted.json()) as { code: string; details: { freeFallback: { available: boolean } } };
+    expect(body.code).toBe('ALLOCATION_EXHAUSTED');
+    expect(body.details.freeFallback.available).toBe(false);
+    const free = c2.options.find((o) => o.free);
+    const limited = await json('POST', '/run', { quoteId: free?.quoteId, prompt: 'hello there' });
+    expect(limited.status).toBe(429);
+    expect(((await limited.json()) as { code: string }).code).toBe('FREE_LIMIT_REACHED');
   });
 
-  it('runs the retry and fail scenarios', async () => {
-    const chat = (await (await fetch(`${API}/api/chats`, { method: 'POST', body: JSON.stringify({ first_prompt: 'Write a poem [retry]' }) })).json()) as { id: string };
-    const q = (await (await fetch(`${API}/api/chats/${chat.id}/quote`, { method: 'POST', body: JSON.stringify({ prompt: 'Write a poem [retry]' }) })).json()) as { quote: { id: string; model_id: string; price: number } };
-    const res = await fetch(`${API}/run`, { method: 'POST', body: JSON.stringify({ quote_id: q.quote.id, chat_id: chat.id, model_id: q.quote.model_id, prompt: 'Write a poem [retry]', voucher: { channel_id: 'ch_demo_0001', cumulative_amount: q.quote.price, signature: 's' } }) });
-    const events = await readSse(res);
-    expect(events.some((e) => e.event === 'retry')).toBe(true);
-    expect(state.messages.get(chat.id)?.some((m) => m.role === 'user' && m.content === 'Write a poem [retry]')).toBe(true);
-  }, 15_000);
+  it('runs the fallback, fail and pending scenarios', async () => {
+    const c = (await (await json('POST', '/chats', { taskType: 'chat' })).json()) as { chatId: string };
+    const quote = async (prompt: string) => (await (await json('POST', `/chats/${c.chatId}/quote`, { prompt })).json()) as { quoteId: string; priceUsd: number };
 
-  it('gates authed routes', async () => {
-    resetMockState({ authed: false });
-    expect((await fetch(`${API}/api/me`)).status).toBe(401);
-    await fetch(`${API}/api/auth/verify`, { method: 'POST', body: JSON.stringify({ message: 'm', signature: 's', kind: 'passkey' }) });
-    expect((await fetch(`${API}/api/me`)).status).toBe(200);
+    const q1 = await quote('[fallback] explain tempo');
+    const ev1 = await readSse(await json('POST', '/run', { quoteId: q1.quoteId, prompt: '[fallback] explain tempo' }));
+    expect(ev1.some((e) => e.event === 'fallback')).toBe(true);
+    expect(ev1.at(-1)?.event).toBe('done');
+
+    const q2 = await quote('[fail] explain tempo');
+    const ev2 = await readSse(await json('POST', '/run', { quoteId: q2.quoteId, prompt: '[fail] explain tempo' }));
+    const err = ev2.at(-1);
+    expect(err?.event).toBe('error');
+    expect((err?.data as { refunded: boolean; freeRerun: { available: boolean } }).refunded).toBe(true);
+
+    const q3 = await quote('[pending] a poster of lagos');
+    const ev3 = await readSse(await json('POST', '/run', { quoteId: q3.quoteId, prompt: '[pending] a poster of lagos' }));
+    const pending = ev3.at(-1);
+    expect(pending?.event).toBe('pending');
+    const { pollUrl } = pending?.data as { pollUrl: string };
+    let last: { status: string; files: unknown[] } = { status: '', files: [] };
+    for (let i = 0; i < 3; i += 1) last = (await (await json('GET', pollUrl)).json()) as { status: string; files: unknown[] };
+    expect(last.status).toBe('succeeded');
+    expect(last.files).toHaveLength(1);
+  }, 20_000);
+
+  it('settings, feedback, compare votes and waitlist validate their bodies', async () => {
+    const me = (await (await json('PATCH', '/me/settings', { allocationUsd: 5, autoFreeFallback: false })).json()) as { allocationUsd: number; autoFreeFallback: boolean };
+    expect(me.allocationUsd).toBe(5);
+    expect(me.autoFreeFallback).toBe(false);
+    expect((await json('POST', '/feedback', { requestId: 'req_0001', rating: 1 })).status).toBe(204);
+    expect((await json('POST', '/feedback', { requestId: 'req_0001', rating: 2 })).status).toBe(400);
+    expect((await json('POST', '/compare/vote', { compareGroup: 'cg', winnerRequestId: 'req_0001', prompt: 'x' })).status).toBe(204);
+    expect((await json('POST', '/waitlist', { email: 'ada@example.com', interest: 'naira', country: 'NG' })).status).toBe(201);
+    expect((await json('POST', '/waitlist', { email: 'nope', interest: 'naira' })).status).toBe(400);
   });
 });
