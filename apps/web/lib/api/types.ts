@@ -79,24 +79,55 @@ export type VerifyInput = z.input<typeof verifyInputSchema>;
 
 /* ------------------------------------ users ------------------------------------ */
 
-/** `GET /me`: address, slider, allocation, weekly limit, autoFreeFallback. */
-export const userSchema = z.preprocess(
-  alias({
-    address: ['tempoAddress', 'tempo_address', 'wallet'],
-    allocationUsd: ['allocation', 'allocation_usd'],
-    weeklyLimitUsd: ['weeklyLimit', 'weekly_limit', 'weekly_limit_usd'],
-    autoFreeFallback: ['auto_free_fallback'],
-    freeRemaining: ['freeMessagesRemaining', 'freeLeft'],
-  }),
+/** Weekly / deposit usage the API attaches to `/me`, `/sessions/current`, `meta` and `done`. */
+export const depositUsageSchema = z.preprocess(
+  alias({ channelId: ['channel_id'], depositUsd: ['deposit'], spentUsd: ['spent', 'usedUsd'], remainingUsd: ['remaining'] }),
   z.object({
+    channelId: z.string().nullish().transform((v) => v ?? null),
+    depositUsd: usdOrZero,
+    spentUsd: usdOrZero,
+    remainingUsd: usdOrZero,
+    usedPct: z.number().nullish().transform((v) => v ?? null),
+  }),
+);
+export type DepositUsage = z.output<typeof depositUsageSchema>;
+
+export const usageSchema = z.object({
+  weekly: z
+    .object({ spentUsd: usdOrZero, limitUsd: usdOrZero, usedPct: z.number().nullish().transform((v) => v ?? null) })
+    .nullish()
+    .transform((v) => v ?? null),
+  deposit: depositUsageSchema.nullish().transform((v) => v ?? null),
+  /** e.g. `low` / `used` — the backend's own low-balance alert, when it sends one. */
+  alert: z.string().nullish().transform((v) => v ?? null),
+});
+export type Usage = z.output<typeof usageSchema>;
+
+/**
+ * `GET /me` (live shape): `{ id, address, email, loginMethod, country, usage, settings: { slider,
+ * allocationUsd, weeklyLimitUsd, autoFreeFallback }, allocation }`. The settings object is
+ * flattened; a flat payload (older shape) is accepted too.
+ */
+export const userSchema = z.preprocess(
+  (input) => {
+    if (!input || typeof input !== 'object') return input;
+    const src = input as Record<string, unknown>;
+    const settings = src.settings && typeof src.settings === 'object' ? (src.settings as Record<string, unknown>) : {};
+    const { allocation: _allocation, settings: _settings, ...rest } = src;
+    return alias({ address: ['tempoAddress', 'tempo_address', 'wallet'], autoFreeFallback: ['auto_free_fallback'], freeRemaining: ['freeRemainingToday', 'freeMessagesRemaining', 'freeLeft'] })({ ...rest, ...settings });
+  },
+  z.object({
+    id: z.string().nullish().transform((v) => v ?? null),
     address: z.string(),
+    email: z.string().nullish().transform((v) => v ?? null),
+    country: z.string().nullish().transform((v) => v ?? null),
     slider: sliderSchema.default('balanced'),
     /** Allocation size (PDF default $2). */
     allocationUsd: usdSchema.default(2),
     /** Weekly spending limit (PDF example $10/week). */
     weeklyLimitUsd: usdSchema.default(10),
     autoFreeFallback: z.boolean().default(true),
-    /** ASSUMPTION: free messages left today, when the backend includes it. */
+    usage: usageSchema.nullish().transform((v) => v ?? null),
     freeRemaining: z.number().int().nonnegative().nullish().transform((v) => v ?? null),
   }),
 );
@@ -109,12 +140,34 @@ export interface SettingsPatch {
   weeklyLimitUsd?: number;
   autoFreeFallback?: boolean;
 }
+/** The PATCH answers with the settings only (`{ slider, allocationUsd, weeklyLimitUsd, autoFreeFallback, country }`). */
+export const settingsSchema = z.object({
+  slider: sliderSchema.default('balanced'),
+  allocationUsd: usdSchema.default(2),
+  weeklyLimitUsd: usdSchema.default(10),
+  autoFreeFallback: z.boolean().default(true),
+});
+export type Settings = z.output<typeof settingsSchema>;
 
 /* ---------------------------------- catalogue ---------------------------------- */
 
-/** `GET /catalog?taskType=` entry (all models by task, quality and price). */
+/** `GET /catalog?taskType=` entry (live: `id`, `label`, `provider`, `taskTypes`, `free`, `web`, `priceEstimateUsd`, `medianLatencyMs`, `quality: { task: 0..1 }`). */
+export function speedLabel(latencyMs: number | null): string | null {
+  if (latencyMs === null) return null;
+  if (latencyMs < 1_000) return 'fast';
+  if (latencyMs < 3_000) return 'steady';
+  return 'slow';
+}
+
 export const catalogModelSchema = z.preprocess(
-  alias({ modelId: ['id', 'model_id'], taskTypes: ['task_types', 'tasks'], priceUsd: ['price', 'price_usd', 'priceEstUsd'], free: ['isFree', 'is_free'] }),
+  (input) => {
+    const v = alias({ modelId: ['id', 'model_id'], taskTypes: ['task_types', 'tasks'], priceUsd: ['priceEstimateUsd', 'price', 'price_usd', 'priceEstUsd'], free: ['isFree', 'is_free'], latencyMs: ['medianLatencyMs', 'latency'] })(input);
+    if (!v || typeof v !== 'object') return v;
+    const src = v as Record<string, unknown>;
+    const q = src.quality;
+    const quality = typeof q === 'number' ? q : q && typeof q === 'object' ? Math.max(0, ...Object.values(q as Record<string, unknown>).filter((n): n is number => typeof n === 'number')) : null;
+    return { ...src, quality, qualityByTask: q && typeof q === 'object' ? q : null };
+  },
   z.object({
     modelId: z.string(),
     label: z.string(),
@@ -122,9 +175,11 @@ export const catalogModelSchema = z.preprocess(
     taskTypes: z.array(z.string()).default([]),
     priceUsd: usdOrZero,
     quality: z.number().nullish().transform((v) => v ?? null),
-    speed: z.string().nullish().transform((v) => v ?? null),
+    qualityByTask: z.record(z.number()).nullish().transform((v) => v ?? null),
+    latencyMs: z.number().nullish().transform((v) => v ?? null),
+    web: z.boolean().default(false),
     free: z.boolean().default(false),
-  }),
+  }).transform((m) => ({ ...m, speed: speedLabel(m.latencyMs) })),
 );
 export type CatalogModel = z.output<typeof catalogModelSchema>;
 export const catalogSchema = z.preprocess(
@@ -146,10 +201,11 @@ export const optionSchema = z.preprocess(
     provider: z.string().default(''),
     quoteId: z.string().nullish().transform((v) => v ?? null),
     priceUsd: usdOrZero,
-    speed: z.string().default('steady'),
+    speed: z.string().default('steady').transform((v) => v.toLowerCase()),
     reason: z.string().default(''),
     free: z.boolean().default(false),
     quality: z.number().nullish().transform((v) => v ?? null),
+    score: z.number().nullish().transform((v) => v ?? null),
     bestQuality: z.boolean().default(false),
     expiresAt: isoDate.nullish().transform((v) => v ?? null),
   }),
@@ -163,6 +219,7 @@ export const recommendResponseSchema = z.preprocess(
   z.object({
     options: z.array(optionSchema),
     taskType: taskTypeSchema.nullish().transform((v) => v ?? null),
+    freeRemainingToday: z.number().int().nonnegative().nullish().transform((v) => v ?? null),
   }),
 );
 export type RecommendResponse = z.output<typeof recommendResponseSchema>;
@@ -170,7 +227,7 @@ export type RecommendResponse = z.output<typeof recommendResponseSchema>;
 /* ------------------------------------ chats ------------------------------------ */
 
 export const chatSchema = z.preprocess(
-  alias({ id: ['chatId', 'chat_id'], taskType: ['task_type'], currentModelId: ['current_model_id'], updatedAt: ['updated_at'], createdAt: ['created_at'], messageCount: ['message_count'], spentUsd: ['spent', 'spent_usd'] }),
+  alias({ id: ['chatId', 'chat_id'], taskType: ['task_type'], currentModelId: ['current_model_id'], updatedAt: ['lastMessageAt', 'updated_at'], createdAt: ['created_at'], messageCount: ['message_count'], spentUsd: ['spent', 'spent_usd'] }),
   z.object({
     id: z.string(),
     title: z.string().nullish().transform((v) => v ?? null),
@@ -202,6 +259,7 @@ export const createChatResponseSchema = z.preprocess(
     options: z.array(optionSchema).default([]),
     taskType: taskTypeSchema.nullish().transform((v) => v ?? null),
     title: z.string().nullish().transform((v) => v ?? null),
+    freeRemainingToday: z.number().int().nonnegative().nullish().transform((v) => v ?? null),
   }),
 );
 export type CreateChatResponse = z.output<typeof createChatResponseSchema>;
@@ -212,8 +270,22 @@ export type MessageRole = z.infer<typeof messageRoleSchema>;
 export const fileSchema = z.object({ url: z.string().url(), mime: z.string().default('application/octet-stream') });
 export type FileRef = z.output<typeof fileSchema>;
 
+function mimeFromUrl(url: string): string {
+  if (/\.(mp3|wav|ogg|m4a)(\?|$)/i.test(url)) return 'audio/mpeg';
+  if (/\.(png)(\?|$)/i.test(url)) return 'image/png';
+  if (/\.(webp)(\?|$)/i.test(url)) return 'image/webp';
+  return 'image/jpeg';
+}
+
+/** Live message: `{ id, seq, role, content, modelId, resultRef, attachments, status, createdAt }`. */
 export const messageSchema = z.preprocess(
-  alias({ id: ['messageId', 'message_id'], text: ['content', 'body'], modelId: ['model_id', 'model'], requestId: ['request_id'], createdAt: ['created_at'], chargedUsd: ['charged_usd', 'priceUsd', 'price'] }),
+  (input) => {
+    const v = alias({ id: ['messageId', 'message_id'], text: ['content', 'body'], modelId: ['model_id', 'model'], requestId: ['request_id'], createdAt: ['created_at'], chargedUsd: ['charged_usd', 'priceUsd', 'price'] })(input);
+    if (!v || typeof v !== 'object') return v;
+    const src = v as Record<string, unknown>;
+    const ref = typeof src.resultRef === 'string' && src.resultRef ? src.resultRef : null;
+    return { ...src, files: Array.isArray(src.files) ? src.files : ref ? [{ url: ref, mime: mimeFromUrl(ref) }] : [] };
+  },
   z.object({
     id: z.string(),
     role: messageRoleSchema,
@@ -222,6 +294,7 @@ export const messageSchema = z.preprocess(
     requestId: z.string().nullish().transform((v) => v ?? null),
     createdAt: isoDate.nullish().transform((v) => v ?? null),
     chargedUsd: usdSchema.nullish().transform((v) => v ?? null),
+    seq: z.number().nullish().transform((v) => v ?? null),
     files: z.array(fileSchema).default([]),
     citations: z.array(z.unknown()).default([]),
     status: z.string().nullish().transform((v) => v ?? 'done'),
@@ -235,11 +308,11 @@ export const chatHistorySchema = z.preprocess(
     if (!v || typeof v !== 'object') return v;
     const src = v as Record<string, unknown>;
     const chat = (src.chat && typeof src.chat === 'object' ? src.chat : src) as Record<string, unknown>;
-    return { ...chat, messages: src.messages ?? chat.messages ?? [], nextBefore: src.nextBefore ?? src.before ?? src.next_before ?? null };
+    return { ...chat, messages: src.messages ?? chat.messages ?? [], nextBefore: src.nextBefore ?? src.before ?? src.next_before ?? null, hasMore: src.hasMore ?? false };
   },
   z.intersection(
     chatSchema,
-    z.object({ messages: z.array(messageSchema), nextBefore: z.string().nullish().transform((v) => v ?? null) }),
+    z.object({ messages: z.array(messageSchema), nextBefore: z.string().nullish().transform((v) => v ?? null), hasMore: z.boolean().default(false) }),
   ),
 );
 export type ChatHistory = z.output<typeof chatHistorySchema>;
@@ -275,6 +348,9 @@ export const quoteSchema = z.preprocess(
     expiresAt: isoDate,
     modelId: z.string().nullish().transform((v) => v ?? null),
     label: z.string().nullish().transform((v) => v ?? null),
+    taskType: taskTypeSchema.nullish().transform((v) => v ?? null),
+    contextTokens: z.number().nullish().transform((v) => v ?? null),
+    freeRemainingToday: z.number().int().nonnegative().nullish().transform((v) => v ?? null),
     suggestion: suggestionSchema.nullish().transform((v) => v ?? null),
   }),
 );
@@ -285,26 +361,45 @@ export type QuoteInput = z.input<typeof quoteInputSchema>;
 
 /* ---------------------------------- sessions ----------------------------------- */
 
-/** `GET /sessions/current`: `suggestedDepositUsd`, `network`, `session?` (deposit/spent/remaining/requests). */
+/** `GET /sessions/current` → `session? { channelId, depositUsd, spentUsd, remainingUsd, settledUsd, requests, openedAt, lastUsedAt }`. */
 export const sessionSummarySchema = z.preprocess(
   alias({ depositUsd: ['deposit', 'deposit_usd'], spentUsd: ['spent', 'spent_usd'], remainingUsd: ['remaining', 'remaining_usd'], channelId: ['channel_id', 'id'], openedAt: ['opened_at', 'createdAt'] }),
   z.object({
     depositUsd: usdOrZero,
     spentUsd: usdOrZero,
     remainingUsd: usdOrZero,
+    settledUsd: usdOrZero,
     requests: z.number().int().nonnegative().default(0),
     channelId: z.string().nullish().transform((v) => v ?? null),
     status: z.string().nullish().transform((v) => v ?? 'open'),
     openedAt: isoDate.nullish().transform((v) => v ?? null),
+    lastUsedAt: isoDate.nullish().transform((v) => v ?? null),
   }),
 );
 export type SessionSummary = z.output<typeof sessionSummarySchema>;
 
+/** Live `network`: `{ chainId, token, recipient, operator }` (the escrow token and payee). */
+export const sessionNetworkSchema = z.object({
+  chainId: z.number().int().nullish().transform((v) => v ?? null),
+  token: z.string().nullish().transform((v) => v ?? null),
+  recipient: z.string().nullish().transform((v) => v ?? null),
+  operator: z.string().nullish().transform((v) => v ?? null),
+});
+export type SessionNetwork = z.output<typeof sessionNetworkSchema>;
+
 export const sessionsCurrentSchema = z.preprocess(
-  alias({ suggestedDepositUsd: ['suggestedDeposit', 'suggested_deposit_usd'] }),
+  (input) => {
+    const v = alias({ suggestedDepositUsd: ['suggestedDeposit', 'suggested_deposit_usd'] })(input);
+    if (!v || typeof v !== 'object') return v;
+    const src = v as Record<string, unknown>;
+    // Older shape: `network` as a plain name.
+    return typeof src.network === 'string' ? { ...src, networkName: src.network, network: null } : src;
+  },
   z.object({
+    paidRunsEnabled: z.boolean().default(true),
     suggestedDepositUsd: usdSchema.default(2),
-    network: z.string().default(''),
+    network: sessionNetworkSchema.nullish().transform((v) => v ?? null),
+    usage: usageSchema.nullish().transform((v) => v ?? null),
     session: sessionSummarySchema.nullish().transform((v) => v ?? null),
   }),
 );
@@ -320,13 +415,24 @@ export type RequestStatus = z.output<typeof requestStatusSchema>;
 
 /** `GET /requests/:id` — a run and what it charged (refunds appear here). */
 export const requestSchema = z.preprocess(
-  alias({ requestId: ['id', 'request_id'], modelId: ['model_id'], chatId: ['chat_id'], chargedUsd: ['charged', 'charged_usd', 'priceUsd', 'price'], refundedUsd: ['refunded_usd'], latencyMs: ['latency_ms', 'latency'], createdAt: ['created_at'], free: ['isFree', 'is_free'], compareGroup: ['compare_group'], txHash: ['tx_hash', 'settlementTx'] }),
+  (input) => {
+    const v = alias({ requestId: ['id', 'request_id'], modelId: ['model_id'], chatId: ['chat_id'], refundedUsd: ['refunded_usd'], latencyMs: ['latency_ms', 'latency'], createdAt: ['created_at'], free: ['isFree', 'is_free'], compareGroup: ['compare_group'], txHash: ['tx_hash', 'settlementTx'], error: ['errorCode', 'errorMessage'] })(input);
+    if (!v || typeof v !== 'object') return v;
+    const src = v as Record<string, unknown>;
+    // Live: `priceUsd` + `charged: boolean` (failed answers are refunded → charged false).
+    const charged = src.charged;
+    const price = src.priceUsd ?? src.price ?? 0;
+    const chargedUsd = src.chargedUsd ?? src.charged_usd ?? (typeof charged === 'boolean' ? (charged ? price : 0) : price);
+    const refundedUsd = src.refundedUsd ?? (charged === false && src.status !== 'pending' && src.status !== 'running' ? price : null);
+    return { ...src, chargedUsd, refundedUsd, priceUsd: price };
+  },
   z.object({
     requestId: z.string(),
     status: requestStatusSchema.default('succeeded'),
     modelId: z.string().nullish().transform((v) => v ?? null),
     label: z.string().nullish().transform((v) => v ?? null),
     chatId: z.string().nullish().transform((v) => v ?? null),
+    priceUsd: usdOrZero,
     chargedUsd: usdOrZero,
     refundedUsd: usdSchema.nullish().transform((v) => v ?? null),
     latencyMs: z.number().nullish().transform((v) => v ?? null),
@@ -334,8 +440,11 @@ export const requestSchema = z.preprocess(
     files: z.array(fileSchema).default([]),
     citations: z.array(z.unknown()).default([]),
     error: z.string().nullish().transform((v) => v ?? null),
+    fallbackReason: z.string().nullish().transform((v) => v ?? null),
+    taskType: taskTypeSchema.nullish().transform((v) => v ?? null),
     free: z.boolean().default(false),
     createdAt: isoDate.nullish().transform((v) => v ?? null),
+    finishedAt: isoDate.nullish().transform((v) => v ?? null),
     compareGroup: z.string().nullish().transform((v) => v ?? null),
     txHash: z.string().nullish().transform((v) => v ?? null),
   }),
@@ -403,7 +512,7 @@ export type ServerErrorCode = (typeof API_ERROR_CODES)[number];
 
 /** `details.freeFallback` on ALLOCATION_EXHAUSTED: whether free is available and how many are left. */
 export const freeFallbackSchema = z.preprocess(
-  alias({ available: ['free', 'ok'], remaining: ['left', 'messagesLeft', 'freeMessagesLeft'] }),
-  z.object({ available: z.boolean().default(false), remaining: z.number().int().nonnegative().nullish().transform((v) => v ?? null), modelId: z.string().default(FREE_MODEL_ID) }),
+  alias({ available: ['free', 'ok'], remaining: ['freeRemainingToday', 'left', 'messagesLeft', 'freeMessagesLeft'] }),
+  z.object({ available: z.boolean().default(false), remaining: z.number().int().nonnegative().nullish().transform((v) => v ?? null), modelId: z.string().default(FREE_MODEL_ID), auto: z.boolean().default(false) }),
 );
 export type FreeFallback = z.output<typeof freeFallbackSchema>;
