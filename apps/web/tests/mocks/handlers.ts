@@ -25,7 +25,6 @@ import {
   publicChat,
   publicRequest,
   recordRequest,
-  speedLabel,
   state,
 } from './state';
 
@@ -44,6 +43,41 @@ async function body<T>(req: Request): Promise<T> {
 }
 
 const sliderOf = (v: unknown): SliderPreset => (v === 'cheapest' || v === 'best' ? v : 'balanced');
+
+/** Live `network` block from `/sessions/current` (Moderato pathUSD escrow). */
+const NETWORK = { chainId: 42431, token: '0x20c0000000000000000000000000000000000000', recipient: '0xD5643c5056a0DF58e7CB04F0420B892b7e84d147', operator: '0x1D410be7021e653E88A0591669d62cb335a69Ec4' };
+
+function usage() {
+  const s = state.session;
+  const weeklySpent = [...state.requests.values()].reduce((sum, r) => sum + (r.status === 'succeeded' && !r.free ? r.chargedUsd : 0), 0);
+  return {
+    weekly: { spentUsd: weeklySpent, limitUsd: state.user.weeklyLimitUsd, usedPct: state.user.weeklyLimitUsd ? Math.round((weeklySpent / state.user.weeklyLimitUsd) * 100) : 0 },
+    deposit: s && s.status === 'open' ? { channelId: s.channelId, depositUsd: s.depositUsd, spentUsd: s.spentUsd, remainingUsd: s.remainingUsd, usedPct: s.depositUsd ? Math.round((s.spentUsd / s.depositUsd) * 100) : 0 } : null,
+    alert: s && s.status === 'open' ? (s.remainingUsd <= 0 ? 'used' : s.remainingUsd < s.depositUsd * 0.1 ? 'low' : null) : null,
+  };
+}
+
+/** Live `/me`: settings nested, usage attached, allocation summary. */
+function publicUser() {
+  const s = state.session;
+  const { slider, allocationUsd, weeklyLimitUsd, autoFreeFallback, address } = state.user;
+  return {
+    id: 'u_demo',
+    address,
+    email: null,
+    loginMethod: 'wallet',
+    country: null,
+    usage: usage(),
+    settings: { slider, allocationUsd, weeklyLimitUsd, autoFreeFallback },
+    allocation: s && s.status === 'open' ? { channelId: s.channelId, depositUsd: s.depositUsd, usedUsd: s.spentUsd, remainingUsd: s.remainingUsd } : null,
+  };
+}
+
+/** Live request record: `priceUsd` + `charged` boolean, `errorCode`. */
+function liveRequest(r: ReturnType<typeof publicRequest>) {
+  const { requestId, chargedUsd, refundedUsd: _refunded, error, label: _label, txHash: _tx, ...rest } = r;
+  return { id: requestId, ...rest, priceUsd: r.status === 'failed' ? (r.refundedUsd ?? 0) : chargedUsd, charged: r.status !== 'failed', errorCode: error, finishedAt: r.status === 'succeeded' || r.status === 'failed' ? r.createdAt : null };
+}
 
 export const handlers = [
   /* ---------------------------------- auth --------------------------------- */
@@ -67,7 +101,7 @@ export const handlers = [
   }),
 
   /* ----------------------------------- me ---------------------------------- */
-  http.get(url('/me'), () => guard() ?? HttpResponse.json({ ...state.user, freeRemaining: Math.max(0, FREE_LIMIT - state.freeUsed) })),
+  http.get(url('/me'), () => guard() ?? HttpResponse.json(publicUser())),
   http.patch(url('/me/settings'), async ({ request }) => {
     const g = guard();
     if (g) return g;
@@ -76,7 +110,8 @@ export const handlers = [
     if (typeof patch.allocationUsd === 'number') state.user.allocationUsd = Math.min(50, Math.max(1, patch.allocationUsd));
     if (typeof patch.weeklyLimitUsd === 'number') state.user.weeklyLimitUsd = Math.min(500, Math.max(5, patch.weeklyLimitUsd));
     if (typeof patch.autoFreeFallback === 'boolean') state.user.autoFreeFallback = patch.autoFreeFallback;
-    return HttpResponse.json({ ...state.user, freeRemaining: Math.max(0, FREE_LIMIT - state.freeUsed) });
+    const { slider, allocationUsd, weeklyLimitUsd, autoFreeFallback } = state.user;
+    return HttpResponse.json({ slider, allocationUsd, weeklyLimitUsd, autoFreeFallback, country: null });
   }),
 
   /* -------------------------------- catalogue ------------------------------- */
@@ -84,7 +119,7 @@ export const handlers = [
     const task = new URL(request.url).searchParams.get('taskType');
     const list = mockModels.filter((m) => !task || m.taskTypes.includes(task as TaskType));
     return HttpResponse.json({
-      models: list.map((m) => ({ modelId: m.modelId, label: m.label, provider: m.provider, taskTypes: m.taskTypes, priceUsd: m.priceUsd, quality: Math.max(...Object.values(m.quality)), speed: speedLabel(m.latency), free: m.free })),
+      models: list.map((m) => ({ id: m.modelId, label: m.label, provider: m.provider, taskTypes: m.taskTypes, free: m.free, web: false, priceEstimateUsd: m.priceUsd, medianLatencyMs: m.latency, quality: m.quality })),
     });
   }),
   http.post(url('/recommend'), async ({ request }) => {
@@ -94,14 +129,17 @@ export const handlers = [
     if (!prompt) return error(400, 'VALIDATION_FAILED', 'prompt is required');
     const task = taskType ?? classify(prompt);
     await delay(150);
-    return HttpResponse.json({ taskType: task, options: optionsFor(task, sliderOf(slider ?? state.user.slider), prompt, null) });
+    return HttpResponse.json({ taskType: task, complexity: 'short', classifiedBy: 'rules', options: optionsFor(task, sliderOf(slider ?? state.user.slider), prompt, null) });
   }),
 
   /* ---------------------------------- chats -------------------------------- */
   http.get(url('/chats'), () => {
     const g = guard();
     if (g) return g;
-    const chats = [...state.chats.values()].filter((c) => !c.archived).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(publicChat);
+    const chats = [...state.chats.values()].filter((c) => !c.archived).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((c) => {
+      const { updatedAt, ...rest } = publicChat(c);
+      return { ...rest, lastMessageAt: updatedAt };
+    });
     return HttpResponse.json({ chats, nextCursor: null });
   }),
   http.post(url('/chats'), async ({ request }) => {
@@ -111,14 +149,14 @@ export const handlers = [
     const chat = createChat(input);
     await delay(150);
     const options = input.description ? optionsFor(chat.taskType, sliderOf(input.slider ?? state.user.slider), input.description, chat.id) : [];
-    return HttpResponse.json({ chatId: chat.id, taskType: chat.taskType, title: chat.title, options }, { status: 201 });
+    return HttpResponse.json({ chatId: chat.id, taskType: chat.taskType, complexity: 'short', classifiedBy: input.description ? 'rules' : 'user', slider: chat.slider ?? state.user.slider, options, freeRemainingToday: Math.max(0, FREE_LIMIT - state.freeUsed) }, { status: 201 });
   }),
   http.get(url('/chats/:id'), ({ params }) => {
     const g = guard();
     if (g) return g;
     const chat = state.chats.get(String(params.id));
     if (!chat || chat.archived) return error(404, 'NOT_FOUND', 'Chat not found');
-    return HttpResponse.json({ ...publicChat(chat), messages: chat.messages, nextBefore: null });
+    return HttpResponse.json({ chat: publicChat(chat), messages: chat.messages.map((m, i) => ({ id: m.id, seq: i + 1, role: m.role, content: m.text, modelId: m.modelId, resultRef: m.files[0]?.url ?? null, attachments: null, status: m.status, createdAt: m.createdAt })), hasMore: false });
   }),
   http.patch(url('/chats/:id'), async ({ params, request }) => {
     const g = guard();
@@ -153,7 +191,7 @@ export const handlers = [
     await delay(120);
     const q = makeQuote(chat.id, chosen, prompt);
     const suggestion = task !== chat.taskType && (task === 'image' || task === 'music' || task === 'research') ? { modelId: optionsFor(task, 'balanced', prompt, null)[0]?.modelId ?? chosen, taskType: task, reason: `looks like ${task}` } : null;
-    return HttpResponse.json({ quoteId: q.quoteId, priceUsd: q.priceUsd, free: q.free, expiresAt: q.expiresAt, modelId: q.modelId, label: modelById(chosen)?.label ?? chosen, suggestion });
+    return HttpResponse.json({ quoteId: q.quoteId, modelId: q.modelId, label: modelById(chosen)?.label ?? chosen, taskType: chat.taskType, free: q.free, priceUsd: q.priceUsd, priceSource: q.free ? 'free' : 'quote', contextTokens: Math.ceil(prompt.length / 4), expiresAt: q.expiresAt, ...(q.free ? { freeRemainingToday: Math.max(0, FREE_LIMIT - state.freeUsed) } : {}), suggestion });
   }),
 
   /* --------------------------------- sessions ------------------------------- */
@@ -161,7 +199,13 @@ export const handlers = [
     const g = guard();
     if (g) return g;
     const s = state.session;
-    return HttpResponse.json({ suggestedDepositUsd: state.user.allocationUsd, network: 'moderato', session: s ? { depositUsd: s.depositUsd, spentUsd: s.spentUsd, remainingUsd: s.remainingUsd, requests: s.requests, channelId: s.channelId, status: s.status, openedAt: s.openedAt } : null });
+    return HttpResponse.json({
+      paidRunsEnabled: true,
+      network: NETWORK,
+      suggestedDepositUsd: state.user.allocationUsd,
+      usage: usage(),
+      session: s ? { channelId: s.channelId, depositUsd: s.depositUsd, spentUsd: s.spentUsd, remainingUsd: s.remainingUsd, settledUsd: 0, requests: s.requests, openedAt: s.openedAt, lastUsedAt: s.openedAt } : null,
+    });
   }),
   // Mock-only stand-ins for what the mppx manager does on-chain (`manager.topUp`, `manager.close`).
   http.post(url('/mock/session/top-up'), async ({ request }) => {
@@ -185,7 +229,7 @@ export const handlers = [
   http.get(url('/requests'), () => {
     const g = guard();
     if (g) return g;
-    const requests = [...state.requests.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(publicRequest);
+    const requests = [...state.requests.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(liveRequest);
     return HttpResponse.json({ requests, nextCursor: null });
   }),
   http.get(url('/requests/:id'), ({ params }) => {
@@ -193,7 +237,7 @@ export const handlers = [
     if (g) return g;
     const r = pollRequest(String(params.id));
     if (!r) return error(404, 'NOT_FOUND', 'Request not found');
-    return HttpResponse.json(publicRequest(r));
+    return HttpResponse.json(liveRequest(r));
   }),
 
   /* -------------------------------- feedback -------------------------------- */
@@ -242,7 +286,7 @@ export const handlers = [
       if (!state.session || state.session.status === 'closed') openSession(state.user.allocationUsd);
       const s = state.session;
       if (s && s.remainingUsd < quote.priceUsd) {
-        return error(402, 'ALLOCATION_EXHAUSTED', 'Your allocation is used up', { freeFallback: { available: state.freeUsed < FREE_LIMIT, remaining: Math.max(0, FREE_LIMIT - state.freeUsed), modelId: FREE_MODEL_ID } });
+        return error(402, 'ALLOCATION_EXHAUSTED', 'Your allocation is used up', { priceUsd: quote.priceUsd, suggestedDepositUsd: state.user.allocationUsd, freeFallback: { available: state.freeUsed < FREE_LIMIT, modelId: FREE_MODEL_ID, freeRemainingToday: Math.max(0, FREE_LIMIT - state.freeUsed), auto: state.user.autoFreeFallback } });
       }
     }
 
@@ -261,7 +305,7 @@ export const handlers = [
     const started = Date.now();
 
     const events: SseEvent[] = [
-      { event: 'meta', data: { requestId, modelId: model.modelId, label: model.label, priceUsd: quote.priceUsd, free: quote.free, chatId: chat.id, userMessageId: userMsg.id, assistantMessageId: asstMsg.id, remainingUsd: state.session?.remainingUsd ?? null }, delay: 120 },
+      { event: 'meta', data: () => ({ requestId, modelId: model.modelId, label: model.label, priceUsd: quote.priceUsd, free: quote.free, chatId: chat.id, userMessageId: userMsg.id, assistantMessageId: asstMsg.id, ...(quote.free ? {} : { remainingUsd: state.session?.remainingUsd ?? null }), usage: usage() }), delay: 120 },
       { event: 'heartbeat', data: null, delay: 200 },
     ];
 
@@ -303,7 +347,7 @@ export const handlers = [
         chat.spentUsd = Math.round((chat.spentUsd + charged) * 1e6) / 1e6;
         if (!quote.free) charge(charged);
         recordRequest({ requestId, status: 'succeeded', modelId: answerModel.modelId, label: answerModel.label, chatId: chat.id, chargedUsd: charged, refundedUsd: null, latencyMs: Date.now() - started, text: reply, files, error: null, free: quote.free, compareGroup: compareGroup ?? null });
-        return { requestId, modelId: answerModel.modelId, text: reply, files, citations: [], chargedUsd: charged, latencyMs: Date.now() - started };
+        return { requestId, modelId: answerModel.modelId, text: reply, files, citations: [], chargedUsd: charged, latencyMs: Date.now() - started, usage: usage() };
       },
       delay: 150,
     });

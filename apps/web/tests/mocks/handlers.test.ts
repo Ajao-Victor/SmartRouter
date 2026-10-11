@@ -39,9 +39,10 @@ describe('mock API (live contract)', () => {
     const ch = (await (await json('POST', '/auth/challenge', { address: state.user.address, origin: 'http://localhost:3300' })).json()) as { message: string };
     expect(ch.message).toMatch(/Chain ID: 42431/);
     expect((await json('POST', '/auth/verify', { message: ch.message, signature: '0xsig' })).ok).toBe(true);
-    const me = (await (await json('GET', '/me')).json()) as { address: string; allocationUsd: number };
+    const me = (await (await json('GET', '/me')).json()) as { address: string; settings: { allocationUsd: number }; usage: { deposit: null } };
     expect(me.address).toBe(state.user.address);
-    expect(me.allocationUsd).toBe(2);
+    expect(me.settings.allocationUsd).toBe(2);
+    expect(me.usage.deposit).toBeNull();
   });
 
   it('POST /chats with a description returns quoted options: top 2 + best quality + free', async () => {
@@ -75,12 +76,15 @@ describe('mock API (live contract)', () => {
     const { requestId, chargedUsd } = done?.data as { requestId: string; chargedUsd: number };
     expect(chargedUsd).toBe(paid?.priceUsd);
     expect(state.session?.spentUsd).toBe(paid?.priceUsd);
-    const s = (await (await json('GET', '/sessions/current')).json()) as { session: { remainingUsd: number } | null; suggestedDepositUsd: number };
+    const s = (await (await json('GET', '/sessions/current')).json()) as { session: { remainingUsd: number } | null; suggestedDepositUsd: number; network: { token: string }; usage: { deposit: { remainingUsd: number } | null } };
     expect(s.suggestedDepositUsd).toBe(2);
+    expect(s.network.token).toMatch(/^0x20c0/);
+    expect(s.usage.deposit?.remainingUsd).toBe(s.session?.remainingUsd);
     expect(s.session?.remainingUsd).toBeCloseTo(2 - (paid?.priceUsd ?? 0), 6);
-    const r = (await (await json('GET', `/requests/${requestId}`)).json()) as { status: string; chargedUsd: number };
+    const r = (await (await json('GET', `/requests/${requestId}`)).json()) as { status: string; priceUsd: number; charged: boolean };
     expect(r.status).toBe('succeeded');
-    expect(r.chargedUsd).toBe(paid?.priceUsd);
+    expect(r.priceUsd).toBe(paid?.priceUsd);
+    expect(r.charged).toBe(true);
     // Same quote cannot be reused.
     expect((await json('POST', '/run', { quoteId: paid?.quoteId, prompt: 'Write a cover letter' })).status).toBe(409);
   }, 15_000);
@@ -133,7 +137,7 @@ describe('mock API (live contract)', () => {
   }, 20_000);
 
   it('settings, feedback, compare votes and waitlist validate their bodies', async () => {
-    const me = (await (await json('PATCH', '/me/settings', { allocationUsd: 5, autoFreeFallback: false })).json()) as { allocationUsd: number; autoFreeFallback: boolean };
+    const me = (await (await json('PATCH', '/me/settings', { allocationUsd: 5, autoFreeFallback: false })).json()) as { allocationUsd: number; autoFreeFallback: boolean; country: null };
     expect(me.allocationUsd).toBe(5);
     expect(me.autoFreeFallback).toBe(false);
     expect((await json('POST', '/feedback', { requestId: 'req_0001', rating: 1 })).status).toBe(204);
