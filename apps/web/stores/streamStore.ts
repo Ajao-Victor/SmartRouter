@@ -61,7 +61,7 @@ export interface StreamActions {
   heartbeat: (messageId: string, at?: number) => void;
   fallback: (messageId: string, fallback: StreamFallback) => void;
   pending: (messageId: string, args: { requestId: string; pollUrl: string }) => void;
-  done: (messageId: string, result: StreamResult & { text?: string | null }) => void;
+  done: (messageId: string, result: StreamResult & { text?: string | null | undefined }) => void;
   fail: (messageId: string, error: StreamError) => void;
   clear: (messageId: string) => void;
   clearAll: () => void;
