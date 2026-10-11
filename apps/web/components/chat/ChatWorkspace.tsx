@@ -49,7 +49,7 @@ const QUOTE_DEBOUNCE_MS = 700;
 /** An option from `POST /chats` / `POST /recommend` already carries a quote for its prompt. */
 function quoteFromOption(o: Option): Quote | null {
   if (!o.quoteId || !o.expiresAt) return null;
-  return { quoteId: o.quoteId, priceUsd: o.priceUsd, free: o.free, expiresAt: o.expiresAt, modelId: o.modelId, label: o.label || null, suggestion: null };
+  return { quoteId: o.quoteId, priceUsd: o.priceUsd, free: o.free, expiresAt: o.expiresAt, modelId: o.modelId, label: o.label || null, taskType: null, contextTokens: null, freeRemainingToday: null, suggestion: null };
 }
 
 /**
@@ -112,6 +112,7 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
         const q = await api.chats.quote(chatId, { prompt: p, ...(modelId ? { modelId } : {}) });
         if (seq !== quoteSeq.current) return null;
         setHeld({ prompt: p, modelId, quote: q });
+        if (q.freeRemainingToday !== null) useAllocationStore.getState().setFreeRemaining(q.freeRemainingToday);
         if (q.suggestion && q.suggestion.modelId !== (modelId ?? q.modelId)) {
           toast.info(`This looks like ${q.suggestion.taskType ?? 'a different task'}`, `${q.suggestion.label || q.suggestion.modelId} may do better — pick it from the model menu.`);
         }
