@@ -87,7 +87,7 @@ export function paidFetch(input: string | URL, init?: RequestInit): Promise<Resp
 
 /** Mock-only routes (MSW) standing in for the on-chain top-up / close the manager performs. */
 async function mockSessionCall(action: 'top-up' | 'close', body: unknown): Promise<void> {
-  const res = await credentialedFetch(apiUrl(`/mock/session/`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await credentialedFetch(apiUrl(`/mock/session/${action}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) throw new ApiError({ status: res.status, code: 'PAYMENT_REQUIRED', message: 'Mock session call failed' });
 }
 
