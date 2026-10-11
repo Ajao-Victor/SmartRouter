@@ -195,3 +195,26 @@ The PDF defines: allocation default $2; spending limit example $10/week; per-use
 - Logging each assumption in `memory.md` in the repo.
 
 Answers can be sent as short replies against the question numbers; a pasted route file or type file is enough for sections 1, 2 and 4.
+
+---
+
+## Resolution — 11 October 2026
+
+*SmartRouter Frontend Architecture* (9 Oct 2026) answered the blocking sections. The frontend now
+builds against that document only:
+
+| Section | Resolution |
+|---|---|
+| 1 REST contract | Every route is specified (no `/api` prefix, USD decimals, camelCase): `/auth/challenge`, `/auth/verify`, `/auth/logout`, `/me`, `/me/settings`, `/catalog`, `/recommend`, `/chats…`, `/chats/:id/quote`, `/run`, `/sessions/current`, `/requests…`, `/feedback`, `/compare/vote`, `/waitlist`. Implemented in `apps/web/lib/api/endpoints.ts`. |
+| 2 `/run` body + SSE | `POST /run { quoteId, prompt, compareGroup? }`; events `meta`, `delta`, `fallback`, `pending`, `done`, `error`, `:` heartbeats every 15 s. Implemented in `apps/web/lib/api/sse.ts`. |
+| 3 Session + vouchers | `mppx` `sessionManager` on a viem Tempo passkey account with an access key as `authorizedSigner`; one deposit approval, silent vouchers, `manager.topUp` / `manager.close`. Implemented in `apps/web/lib/tempo/`. |
+| 4 Shared types | Zod schemas mirror the PDF shapes with tolerant key aliases (`apps/web/lib/api/types.ts`). |
+| 5 Testnet API | `https://smartrouter-testnet-8f580f845259.herokuapp.com` (Moderato, chain 42431, pathUSD, mock model text). Mainnet `https://smartrouter-mainnet-9d3c469b9ffd.herokuapp.com` (chain 4217, USDC.e). |
+| 6 Auth | SIWE: challenge → sign exactly → verify → 7-day `sr_session` cookie; `GET /me` 401 = signed out; `APP_ORIGINS` on the backend must list the exact frontend origins. |
+| 8 CSP | No SDK iframe: passkeys are native WebAuthn; `connect-src` = API origin + public RPC origin (+ Sentry). |
+| 9 Caps | Surfaced through error codes (`FREE_LIMIT_REACHED` with `details.scope`, `ALLOCATION_EXHAUSTED` with `details.freeFallback` / `details.reason: 'weekly_limit'`, `RATE_LIMITED` with `Retry-After`). |
+| 10 Receipts | `GET /requests/:id` returns the run and what it charged; refunds appear there. Explorer: `explore.tempo.xyz` / `explore.testnet.tempo.xyz`. |
+
+Still open (not blocking launch): upload limits (§7 — attachments were removed from the composer since
+`/run` takes `{ quoteId, prompt }` only), and whether `GET /requests/:id` exposes a settlement tx hash
+(the receipt shows it when present).
