@@ -3,32 +3,26 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { ArrowDown } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
 
 import type { Message } from '@/lib/api/types';
-import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';
-import { fadeScale, withReduced } from '@/lib/motion/variants';
 
 import { selectAnyStreaming, useStreamStore } from '@/stores/streamStore';
 
 import { MessageBubble } from '@/components/chat/MessageBubble';
-import { Button } from '@/components/ui/Button';
 
 export interface ThreadProps {
   messages: Message[];
-  jobs?: Record<string, { status: 'queued' | 'running' | 'done' | 'failed'; result_ref: string | null; error: string | null }>;
   onRerunFree?: (messageId: string) => void;
   /** Message ids rendered elsewhere (CompareSplit). */
   exclude?: readonly string[];
-  /** Extra content rendered below the last message (e.g. retry notices, TopUpBar). */
+  /** Extra content rendered below the last message (compare split, top-up prompt). */
   children?: React.ReactNode;
 }
 
-const WINDOW = 60;
+const WINDOW = 80;
 
-/** The conversation: auto-follows while streaming unless the user scrolled up ("Jump to latest"). */
-export function Thread({ messages, jobs = {}, onRerunFree, exclude = [], children }: ThreadProps) {
-  const reduced = useReducedMotionSafe();
+/** The conversation. Follows the stream while the reader is near the bottom; otherwise offers "Jump to latest". */
+export function Thread({ messages, onRerunFree, exclude = [], children }: ThreadProps) {
   const endRef = useRef<HTMLDivElement | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [pinned, setPinned] = useState(true);
@@ -48,47 +42,45 @@ export function Thread({ messages, jobs = {}, onRerunFree, exclude = [], childre
 
   const lastId = messages.at(-1)?.id;
   useEffect(() => {
-    if (pinned) endRef.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'end' });
-  }, [lastId, streaming, pinned, reduced]);
+    if (pinned) endRef.current?.scrollIntoView({ block: 'end' });
+  }, [lastId, streaming, pinned]);
 
   return (
-    <div className="space-y-4" aria-label="Conversation">
+    <div className="space-y-8" aria-label="Conversation">
       {!showAll && messages.length > WINDOW && (
         <div className="text-center">
-          <Button
-            size="sm"
-            variant="ghost"
+          <button
+            type="button"
+            className="rounded-md px-3 py-1.5 text-sm text-text-1 transition-colors hocus:bg-bg-2 hocus:text-text-0"
             onClick={() => {
               setShowAll(true);
             }}
           >
             Show {String(messages.length - WINDOW)} earlier messages
-          </Button>
+          </button>
         </div>
       )}
       {visible
-        .filter((m) => !exclude.includes(m.id))
+        .filter((m) => !exclude.includes(m.id) && m.role !== 'system')
         .map((m) => (
-          <MessageBubble key={m.id} message={m} job={jobs[m.id] ?? null} {...(onRerunFree ? { onRerunFree } : {})} />
+          <MessageBubble key={m.id} message={m} {...(onRerunFree ? { onRerunFree } : {})} />
         ))}
       {children}
       <div ref={endRef} />
-      <AnimatePresence>
-        {!pinned && streaming && (
-          <motion.div variants={withReduced(fadeScale, reduced)} initial="hidden" animate="visible" exit="exit" className="fixed bottom-36 left-1/2 z-content -translate-x-1/2">
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => {
-                setPinned(true);
-                endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-              }}
-            >
-              <ArrowDown size={14} /> Jump to latest
-            </Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {!pinned && streaming && (
+        <div className="fixed bottom-36 left-1/2 z-content -translate-x-1/2">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-pill bg-bg-2 px-3 py-1.5 text-sm text-text-0 shadow-hairline-strong transition-colors hocus:bg-bg-3"
+            onClick={() => {
+              setPinned(true);
+              endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }}
+          >
+            <ArrowDown size={14} aria-hidden="true" /> Jump to latest
+          </button>
+        </div>
+      )}
     </div>
   );
 }
