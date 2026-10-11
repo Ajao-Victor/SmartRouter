@@ -258,7 +258,7 @@ export function useRun(chatId: string) {
     async (prompt: string): Promise<RunStart> => {
       try {
         const quote = await api.chats.quote(chatId, { prompt, modelId: FREE_MODEL_ID });
-        return run({ prompt, quote: { ...quote, free: true }, autoFreeFallback: false });
+        return await run({ prompt, quote: { ...quote, free: true }, autoFreeFallback: false });
       } catch (err) {
         return handlePreflightError(err, prompt, micro(0), () => undefined);
       }
