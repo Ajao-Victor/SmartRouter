@@ -11,7 +11,7 @@
 - **Deadline:** live by Oct 11, 2026; submission Oct 12, 2026 (Colosseum). Docs generated Oct 8, 2026.
 - **Frontend home:** `apps/web` (Next.js 15 + Tailwind 4), calling the API directly (no Vercel rewrites). Dev server: `pnpm dev` → http://localhost:3300 (e2e uses 3100).
 - **Live backends (PDF):** testnet `https://smartrouter-testnet-8f580f845259.herokuapp.com` (Moderato, chain 42431, pathUSD faucet, mock model text, real payments); mainnet `https://smartrouter-mainnet-9d3c469b9ffd.herokuapp.com` (chain 4217, USDC.e). Vercel: `main` = mainnet, `staging` = testnet; see `Deployment_Guide.md`.
-- **Authorship:** commits by Victor Oluwatimileyin Ajao only; no AI attribution trailers from 2026-10-10 on. The 45 earlier `Co-Authored-By` trailers are stripped by the owner with: `FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --env-filter 'export GIT_AUTHOR_NAME="Victor Oluwatimileyin Ajao"; export GIT_COMMITTER_NAME="Victor Oluwatimileyin Ajao"' --msg-filter 'perl -0pe "s/\n+Co-Authored-By:[^\n]*Claude[^\n]*//gi; s/\s+\z/\n/"' -- main && git push --force-with-lease origin main` (backup branch `backup/pre-rewrite-2026-10-10`).
+- **Authorship:** on 2026-10-11 `main` was rewritten with `git filter-branch` (584 commits, one author/committer identity, zero `Co-Authored-By` trailers, tree unchanged) and force-pushed; local-only backup branches `backup/pre-rewrite-2026-10-10` and `backup/pre-rewrite-2026-10-11` hold the old history. No AI attribution in any commit.
 - **Cut order if slipping:** Compare mode, then music (feature flags `NEXT_PUBLIC_FLAG_COMPARE`, `NEXT_PUBLIC_FLAG_MUSIC`).
 
 ## Fixed numbers (from PDF — never change without a PDF update)

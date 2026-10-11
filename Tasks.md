@@ -351,7 +351,7 @@
 Source of truth from here on: **`SmartRouter Frontend Architecture.pdf` (Oct 9, 2026)**. Everything marked *(proposed)* above is superseded by that contract.
 
 ### Task 30 — Git authorship  `done` (2026-10-10)
-- `git config user.name "Victor Oluwatimileyin Ajao"`; every commit since carries no AI attribution. History rewrite to strip the 45 earlier `Co-Authored-By` trailers is prepared (`backup/pre-rewrite-2026-10-10` branch; command in `memory.md`) and must be run by the repo owner (`git filter-branch` + force push).
+- `git config user.name "Victor Oluwatimileyin Ajao"`; on 2026-10-11 `main` was rewritten with `git filter-branch` (single author identity, zero `Co-Authored-By` trailers, 584 commits, tree unchanged) and force-pushed. Local backup branches `backup/pre-rewrite-2026-10-1[01]` keep the old history.
 
 ### Task 31 — Live contract foundation  `done` (2026-10-10; commits from 504d831 through eec900b)
 - `lib/env.ts` (four PDF public vars), `lib/money.ts` (USD ↔ micro), `lib/api/types.ts` (Zod shapes for every route), `lib/api/client.ts` (plain fetch, `credentials: 'include'`, uppercase error codes), `lib/api/endpoints.ts` (every route), `lib/api/sse.ts` (fetch + ReadableStream reader for `meta/delta/fallback/pending/done/error`, `:` heartbeats, 60 s watchdog), `lib/api/errors.ts` (one code → one UI action).
