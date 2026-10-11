@@ -4,30 +4,23 @@ import { useState } from 'react';
 
 import { clsx } from 'clsx';
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
-import { motion } from 'motion/react';
-
-import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';
-import { pop, withReduced } from '@/lib/motion/variants';
 
 import { useFeedback } from '@/hooks/useFeedback';
 import { toast } from '@/stores/toastStore';
 
-
-import { burstAt, useParticleBurst } from '@/components/fx/ParticleBurst';
-
-export function ThumbsFeedback({ messageId }: { messageId: string }) {
-  const reduced = useReducedMotionSafe();
-  const burst = useParticleBurst();
+/** Thumbs up/down under an answer → `POST /feedback { requestId, rating: 1 | -1 }`. */
+export function ThumbsFeedback({ requestId }: { requestId: string }) {
   const feedback = useFeedback();
-  const [vote, setVote] = useState<'up' | 'down' | null>(null);
+  const [vote, setVote] = useState<1 | -1 | null>(null);
 
-  const send = (v: 'up' | 'down', e: React.MouseEvent) => {
-    setVote(v);
-    if (v === 'up') burst(burstAt(e, '#19E6C1', 6));
+  const send = (rating: 1 | -1) => {
+    if (vote === rating) return;
+    setVote(rating);
     feedback.mutate(
-      { message_id: messageId, vote: v },
+      { requestId, rating },
       {
         onError: () => {
+          setVote(null);
           toast.warn('Could not save your feedback');
         },
       },
@@ -35,25 +28,23 @@ export function ThumbsFeedback({ messageId }: { messageId: string }) {
   };
 
   return (
-    <span className="inline-flex items-center gap-1" aria-label="Rate this reply">
-      {(['up', 'down'] as const).map((v) => (
-        <motion.button
-          key={v}
+    <span className="inline-flex items-center gap-0.5" aria-label="Rate this reply">
+      {([1, -1] as const).map((rating) => (
+        <button
+          key={rating}
           type="button"
-          aria-label={v === 'up' ? 'Thumbs up' : 'Thumbs down'}
-          aria-pressed={vote === v}
-          variants={withReduced(pop, reduced)}
-          animate={vote === v ? 'active' : 'idle'}
-          onClick={(e) => {
-            send(v, e);
+          aria-label={rating === 1 ? 'Good answer' : 'Bad answer'}
+          aria-pressed={vote === rating}
+          onClick={() => {
+            send(rating);
           }}
           className={clsx(
-            'hit-44 -m-1 flex items-center justify-center rounded-pill text-text-2 transition-colors hocus:text-text-0',
-            vote === v && (v === 'up' ? 'text-accent-2' : 'text-signal'),
+            'flex h-7 w-7 items-center justify-center rounded-md text-text-2 transition-colors hocus:bg-bg-2 hocus:text-text-0',
+            vote === rating && (rating === 1 ? 'text-accent-2' : 'text-signal'),
           )}
         >
-          {v === 'up' ? <ThumbsUp size={14} /> : <ThumbsDown size={14} />}
-        </motion.button>
+          {rating === 1 ? <ThumbsUp size={14} /> : <ThumbsDown size={14} />}
+        </button>
       ))}
     </span>
   );
