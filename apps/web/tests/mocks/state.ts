@@ -1,253 +1,334 @@
 /**
- * In-memory backend state for the mock API so flows work end-to-end:
- * auth, chats/messages, quotes, sessions (allocation), requests/receipts, jobs, free usage.
+ * In-memory backend for the mock API: user, chats, quotes, the payment session, requests and
+ * the free quota. Shapes are what the live API sends (USD decimals, camelCase keys).
  */
-import type {
-  Chat,
-  Classification,
-  Job,
-  Message,
-  Quote,
-  RequestReceipt,
-  TaskType,
-  User,
-  UserSession,
-} from '@/lib/api/types';
-import { micro, type MicroUsd } from '@/lib/money';
+import type { SliderPreset, TaskType } from '@/lib/api/types';
 
-import { FREE_MODEL_ID, mockModels, mockSessionOpen, mockUser, NOW } from './fixtures';
+import { FREE_MODEL_ID, mockModels, mockUser, NOW, type MockModel, type MockUser } from './fixtures';
+
+export interface MockMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  modelId: string | null;
+  requestId: string | null;
+  createdAt: string;
+  chargedUsd: number | null;
+  files: { url: string; mime: string }[];
+  status: 'done' | 'error' | 'pending';
+}
+
+export interface MockChat {
+  id: string;
+  title: string | null;
+  taskType: TaskType;
+  slider: SliderPreset | null;
+  currentModelId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  spentUsd: number;
+  archived: boolean;
+  messages: MockMessage[];
+}
+
+export interface MockQuote {
+  quoteId: string;
+  chatId: string;
+  modelId: string;
+  prompt: string;
+  priceUsd: number;
+  free: boolean;
+  expiresAt: string;
+  used: boolean;
+}
+
+export interface MockSession {
+  channelId: string;
+  depositUsd: number;
+  spentUsd: number;
+  remainingUsd: number;
+  requests: number;
+  status: 'open' | 'closed';
+  openedAt: string;
+}
+
+export interface MockRequest {
+  requestId: string;
+  status: 'pending' | 'running' | 'succeeded' | 'failed';
+  modelId: string;
+  label: string;
+  chatId: string;
+  chargedUsd: number;
+  refundedUsd: number | null;
+  latencyMs: number | null;
+  text: string | null;
+  files: { url: string; mime: string }[];
+  error: string | null;
+  free: boolean;
+  createdAt: string;
+  compareGroup: string | null;
+  txHash: string | null;
+  /** Polls seen (pending jobs finish on the 3rd poll). */
+  polls: number;
+}
 
 export interface MockState {
   authed: boolean;
-  user: User;
-  session: UserSession | null;
-  chats: Map<string, Chat>;
-  messages: Map<string, Message[]>;
-  quotes: Map<string, Quote>;
-  requests: Map<string, RequestReceipt & { polls: number }>;
-  jobs: Map<string, Job & { polls: number; request_id: string }>;
-  freeMessages: number;
-  counter: number;
+  user: MockUser;
+  chats: Map<string, MockChat>;
+  quotes: Map<string, MockQuote>;
+  session: MockSession | null;
+  requests: Map<string, MockRequest>;
+  freeUsed: number;
+  feedback: { requestId: string; rating: number }[];
+  votes: { compareGroup: string; winnerRequestId: string }[];
+  waitlist: { email: string; interest: string; country?: string }[];
 }
 
-export const state: MockState = {
-  authed: true,
-  user: { ...mockUser },
-  session: mockSessionOpen(),
-  chats: new Map(),
-  messages: new Map(),
-  quotes: new Map(),
-  requests: new Map(),
-  jobs: new Map(),
-  freeMessages: 3,
-  counter: 0,
+export const FREE_LIMIT = 30;
+export const QUOTE_TTL_MS = 5 * 60_000;
+
+let counter = 0;
+export function nextId(prefix: string): string {
+  counter += 1;
+  return `${prefix}_${String(counter).padStart(4, '0')}`;
+}
+
+function blank(): MockState {
+  return { authed: true, user: mockUser(), chats: new Map(), quotes: new Map(), session: null, requests: new Map(), freeUsed: 0, feedback: [], votes: [], waitlist: [] };
+}
+
+export const state: MockState = blank();
+
+export function resetMockState(over: Partial<Pick<MockState, 'authed' | 'session' | 'freeUsed'>> = {}): void {
+  const fresh = blank();
+  counter = 0;
+  Object.assign(state, fresh, over);
+  seedDemoChat();
+}
+
+/* --------------------------------- classify --------------------------------- */
+
+const KEYWORDS: [TaskType, RegExp][] = [
+  ['image', /\b(image|picture|photo|logo|poster|draw|illustration|render)\b/i],
+  ['music', /\b(song|music|track|beat|melody|jingle|lyrics)\b/i],
+  ['coding', /\b(code|bug|function|typescript|python|javascript|sql|api|regex|refactor|compile)\b/i],
+  ['translation', /\b(translate|translation|in (french|spanish|yoruba|igbo|hausa|german|portuguese))\b/i],
+  ['research', /\b(research|compare|sources|latest|cite|summar(y|ise|ize) the (news|paper)|what is the current)\b/i],
+  ['writing', /\b(write|draft|cover letter|essay|email|blog|rewrite|edit|proofread|caption|post)\b/i],
+];
+
+export function classify(prompt: string): TaskType {
+  for (const [task, re] of KEYWORDS) if (re.test(prompt)) return task;
+  return 'chat';
+}
+
+/* ---------------------------------- pricing --------------------------------- */
+
+function roundUpUsd(usd: number): number {
+  return Math.ceil(usd * 10_000 - 1e-9) / 10_000;
+}
+
+export function modelById(modelId: string): MockModel | undefined {
+  return mockModels.find((m) => m.modelId === modelId);
+}
+
+/** Price = typical price scaled by prompt length + 10% fee, rounded up to $0.0001 (PDF). */
+export function priceFor(modelId: string, prompt: string): number {
+  const m = modelById(modelId);
+  if (!m || m.free) return 0;
+  const scale = 1 + Math.min(3, prompt.length / 800);
+  return roundUpUsd(m.priceUsd * scale * 1.1);
+}
+
+export function speedLabel(latency: number): string {
+  if (latency < 800) return 'fast';
+  if (latency < 2500) return 'steady';
+  return 'slow';
+}
+
+const WEIGHTS: Record<SliderPreset, { q: number; p: number; s: number }> = {
+  cheapest: { q: 0.2, p: 0.7, s: 0.1 },
+  balanced: { q: 0.45, p: 0.4, s: 0.15 },
+  best: { q: 0.8, p: 0.1, s: 0.1 },
 };
 
-export function resetMockState(over: Partial<Pick<MockState, 'authed' | 'session' | 'freeMessages'>> = {}): void {
-  state.authed = over.authed ?? true;
-  state.user = { ...mockUser };
-  state.session = over.session === undefined ? mockSessionOpen() : over.session;
-  state.chats.clear();
-  state.messages.clear();
-  state.quotes.clear();
-  state.requests.clear();
-  state.jobs.clear();
-  state.freeMessages = over.freeMessages ?? 3;
-  state.counter = 0;
-  seedChats();
+export interface MockOption {
+  modelId: string;
+  label: string;
+  provider: string;
+  quoteId: string | null;
+  priceUsd: number;
+  speed: string;
+  reason: string;
+  free: boolean;
+  quality: number;
+  bestQuality: boolean;
+  expiresAt: string | null;
 }
 
-export function nextId(prefix: string): string {
-  state.counter += 1;
-  return `${prefix}_${String(state.counter).padStart(4, '0')}`;
-}
-
-/* ------------------------------- classification ----------------------------- */
-
-export function classify(prompt: string): Classification {
-  const p = prompt.toLowerCase();
-  let task_type: TaskType = 'chat';
-  if (/\b(image|picture|photo|draw|render|logo|poster)\b/.test(p)) task_type = 'image';
-  else if (/\b(song|music|beat|lyrics|track)\b/.test(p)) task_type = 'music';
-  else if (/\b(code|bug|function|typescript|python|refactor|sql|regex)\b/.test(p)) task_type = 'coding';
-  else if (/\b(research|sources|latest|news|compare prices|find out)\b/.test(p)) task_type = 'research';
-  else if (/\b(translate|translation|in yoruba|in french|in igbo)\b/.test(p)) task_type = 'translation';
-  else if (/\b(write|letter|essay|email|blog|article|draft|story)\b/.test(p)) task_type = 'writing';
-  const complexity = prompt.length > 240 || /\b(long|detailed|report)\b/.test(p) ? 'long' : 'short';
-  return { task_type, complexity, language: 'en', needs_web: task_type === 'research' };
-}
-
-/* ---------------------------------- chats ----------------------------------- */
-
-export function createChat(input: { task_type?: TaskType; first_prompt?: string }): Chat {
-  const id = nextId('chat');
-  const task_type = input.task_type ?? (input.first_prompt ? classify(input.first_prompt).task_type : 'chat');
-  const chat: Chat = {
-    id,
-    user_id: state.user.id,
-    title: null,
-    task_type,
-    slider: state.user.slider,
-    current_model_id: null,
-    summary: null,
-    message_count: 0,
-    spent: micro(0),
-    created_at: NOW(),
-    updated_at: NOW(),
+/** PDF: three recommended models (top 2 by score + best quality) plus the free option. */
+export function optionsFor(task: TaskType, slider: SliderPreset, prompt: string, chatId: string | null): MockOption[] {
+  const w = WEIGHTS[slider];
+  const paid = mockModels.filter((m) => !m.free && m.taskTypes.includes(task)).map((m) => ({ m, price: priceFor(m.modelId, prompt), q: m.quality[task] ?? 0.4 }));
+  if (paid.length === 0) return [];
+  const maxQ = Math.max(...paid.map((x) => x.q));
+  const minP = Math.min(...paid.map((x) => x.price));
+  const maxP = Math.max(...paid.map((x) => x.price));
+  const scored = paid
+    .map((x) => {
+      const quality = x.q / maxQ;
+      const price = maxP === minP ? 1 : 1 - (x.price - minP) / (maxP - minP);
+      const speed = Math.max(0, 1 - x.m.latency / 10_000);
+      return { ...x, score: w.q * quality + w.p * price + w.s * speed };
+    })
+    .sort((a, b) => b.score - a.score);
+  const best = [...scored].sort((a, b) => b.q - a.q)[0];
+  const picks = scored.slice(0, 2);
+  if (best && !picks.some((p) => p.m.modelId === best.m.modelId)) picks.push(best);
+  const bestPrice = best?.price ?? 1;
+  const toOption = (x: (typeof scored)[number]): MockOption => {
+    const pct = Math.round((x.q / (best?.q ?? 1)) * 100);
+    const ratio = x.price > 0 ? Math.max(1, Math.round(bestPrice / x.price)) : 1;
+    const isBest = x.m.modelId === best?.m.modelId;
+    const quote = chatId ? makeQuote(chatId, x.m.modelId, prompt) : null;
+    return {
+      modelId: x.m.modelId,
+      label: x.m.label,
+      provider: x.m.provider,
+      quoteId: quote?.quoteId ?? null,
+      priceUsd: x.price,
+      speed: speedLabel(x.m.latency),
+      reason: isBest ? 'Highest quality for this task' : `${String(pct)}% of the best quality at 1/${String(ratio)} of the price`,
+      free: false,
+      quality: x.q,
+      bestQuality: isBest,
+      expiresAt: quote?.expiresAt ?? null,
+    };
   };
-  state.chats.set(id, chat);
-  state.messages.set(id, []);
+  const out = picks.map(toOption);
+  const free = modelById(FREE_MODEL_ID);
+  if (free && free.taskTypes.includes(task)) {
+    const quote = chatId ? makeQuote(chatId, FREE_MODEL_ID, prompt) : null;
+    out.push({ modelId: FREE_MODEL_ID, label: free.label, provider: free.provider, quoteId: quote?.quoteId ?? null, priceUsd: 0, speed: 'fast', reason: `Free · ${String(FREE_LIMIT - state.freeUsed)} of ${String(FREE_LIMIT)} left today`, free: true, quality: free.quality[task] ?? 0.4, bestQuality: false, expiresAt: quote?.expiresAt ?? null });
+  }
+  return out;
+}
+
+/* ----------------------------------- chats ---------------------------------- */
+
+export function createChat(input: { taskType?: TaskType; description?: string; slider?: SliderPreset }): MockChat {
+  const now = NOW();
+  const taskType = input.taskType ?? (input.description ? classify(input.description) : 'chat');
+  const chat: MockChat = {
+    id: nextId('chat'),
+    title: input.description ? input.description.slice(0, 48) : null,
+    taskType,
+    slider: input.slider ?? null,
+    currentModelId: null,
+    createdAt: now,
+    updatedAt: now,
+    spentUsd: 0,
+    archived: false,
+    messages: [],
+  };
+  state.chats.set(chat.id, chat);
   return chat;
 }
 
-export function appendMessage(chatId: string, m: Omit<Message, 'id' | 'chat_id' | 'seq' | 'created_at'>): Message {
-  const list = state.messages.get(chatId) ?? [];
-  const msg: Message = { id: nextId('msg'), chat_id: chatId, seq: list.length, created_at: NOW(), ...m };
-  list.push(msg);
-  state.messages.set(chatId, list);
+export function appendMessage(chatId: string, m: Omit<MockMessage, 'id' | 'createdAt'>): MockMessage {
   const chat = state.chats.get(chatId);
-  if (chat) {
-    chat.message_count = list.length;
-    chat.updated_at = NOW();
-    if (!chat.title && m.role === 'user') chat.title = m.content.slice(0, 48).replace(/\s+\S*$/, '') || 'New chat';
-  }
+  if (!chat) throw new Error(`no chat ${chatId}`);
+  const msg: MockMessage = { id: nextId('msg'), createdAt: NOW(), ...m };
+  chat.messages.push(msg);
+  chat.updatedAt = msg.createdAt;
+  if (!chat.title && m.role === 'user') chat.title = m.text.slice(0, 48);
   return msg;
+}
+
+export function publicChat(chat: MockChat) {
+  return { id: chat.id, title: chat.title, taskType: chat.taskType, slider: chat.slider, currentModelId: chat.currentModelId, createdAt: chat.createdAt, updatedAt: chat.updatedAt, messageCount: chat.messages.length, spentUsd: chat.spentUsd };
 }
 
 /* ---------------------------------- quotes ---------------------------------- */
 
-export function pricePaid(modelId: string, prompt: string, contextTokens: number): MicroUsd {
-  const model = mockModels.find((m) => m.id === modelId);
-  if (!model || model.id === FREE_MODEL_ID) return micro(0);
-  // provider 402 ≈ price_est scaled by context, then +10% fee rounded up to $0.0001 (PDF)
-  const scale = 1 + Math.min(2, contextTokens / 4000);
-  const providerCost = Math.round(model.price_est * scale);
-  const withFee = Math.ceil((providerCost * 11_000) / 10_000);
-  return micro(Math.ceil(withFee / 100) * 100);
-}
-
-export function makeQuote(chatId: string, modelId: string, prompt: string, contextTokens: number): Quote {
-  const id = nextId('q');
-  const quote: Quote = {
-    id,
-    user_id: state.user.id,
-    chat_id: chatId,
-    model_id: modelId,
-    prompt_hash: `h${String(Math.abs(hash(prompt)))}`,
-    context_tokens: contextTokens,
-    price: pricePaid(modelId, prompt, contextTokens),
-    est_cost: micro(Math.round(pricePaid(modelId, prompt, contextTokens) / 1.1)),
-    expires_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+export function makeQuote(chatId: string, modelId: string, prompt: string): MockQuote {
+  const m = modelById(modelId);
+  const quote: MockQuote = {
+    quoteId: nextId('q'),
+    chatId,
+    modelId,
+    prompt,
+    priceUsd: priceFor(modelId, prompt),
+    free: m?.free ?? false,
+    expiresAt: new Date(Date.now() + QUOTE_TTL_MS).toISOString(),
+    used: false,
   };
-  state.quotes.set(id, quote);
+  state.quotes.set(quote.quoteId, quote);
   return quote;
 }
 
-function hash(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return h;
+/* --------------------------------- sessions --------------------------------- */
+
+export function openSession(depositUsd: number): MockSession {
+  const s: MockSession = { channelId: nextId('ch'), depositUsd, spentUsd: 0, remainingUsd: depositUsd, requests: 0, status: 'open', openedAt: NOW() };
+  state.session = s;
+  return s;
+}
+
+export function charge(usd: number): void {
+  const s = state.session;
+  if (!s) return;
+  s.spentUsd = Math.round((s.spentUsd + usd) * 1e6) / 1e6;
+  s.remainingUsd = Math.max(0, Math.round((s.depositUsd - s.spentUsd) * 1e6) / 1e6);
+  s.requests += 1;
 }
 
 /* --------------------------------- requests --------------------------------- */
 
-export function recordRequest(args: {
-  chatId: string;
-  quote: Quote | null;
-  modelId: string;
-  isFree: boolean;
-  price: MicroUsd;
-  latencyMs: number;
-  voucher: MicroUsd | null;
-}): RequestReceipt & { polls: number } {
-  const id = nextId('req');
-  const receipt: RequestReceipt & { polls: number } = {
-    id,
-    user_id: state.user.id,
-    quote_id: args.quote?.id ?? null,
-    chat_id: args.chatId,
-    channel_id: args.isFree ? null : (state.session?.channel_id ?? null),
-    model_id: args.modelId,
-    is_free: args.isFree,
-    price: args.price,
-    provider_cost: args.isFree ? null : micro(Math.round(args.price / 1.1)),
-    latency_ms: args.latencyMs,
-    provider_receipt: args.isFree ? null : `mpp_rcpt_${id}`,
-    status: 'done',
-    voucher_amount: args.voucher,
-    tx_hash: null,
-    created_at: NOW(),
-    polls: 0,
-  };
-  state.requests.set(id, receipt);
-  if (!args.isFree && state.session) {
-    state.session.highest_voucher = micro(state.session.highest_voucher + args.price);
-    state.session.counted = micro(state.session.counted + args.price);
-    state.session.last_used_at = NOW();
-  }
-  const chat = state.chats.get(args.chatId);
-  if (chat) chat.spent = micro(chat.spent + args.price);
-  return receipt;
+export function recordRequest(args: Omit<MockRequest, 'requestId' | 'createdAt' | 'polls' | 'txHash'> & { requestId?: string }): MockRequest {
+  const r: MockRequest = { requestId: args.requestId ?? nextId('req'), createdAt: NOW(), polls: 0, txHash: null, ...args };
+  state.requests.set(r.requestId, r);
+  return r;
 }
 
-/** Settlement simulation: the tx hash appears on the 2nd poll (PDF: every $1 or hourly). */
-export function pollRequest(id: string): RequestReceipt | null {
+export function publicRequest(r: MockRequest) {
+  const { polls: _polls, ...rest } = r;
+  return rest;
+}
+
+/** Pending jobs finish on the third poll; settled runs reveal a tx hash on the second. */
+export function pollRequest(id: string): MockRequest | null {
   const r = state.requests.get(id);
   if (!r) return null;
   r.polls += 1;
-  if (r.polls >= 2 && !r.is_free && !r.tx_hash) {
-    r.tx_hash = `0x${'ab12'.repeat(16)}`;
+  if (r.status === 'pending' && r.polls >= 3) {
+    r.status = 'succeeded';
+    r.latencyMs = 42_000;
+    const chat = state.chats.get(r.chatId);
+    const msg = chat?.messages.find((m) => m.requestId === r.requestId);
+    if (msg) {
+      msg.status = 'done';
+      msg.text = r.text ?? '';
+      msg.files = r.files;
+      msg.chargedUsd = r.chargedUsd;
+    }
+    if (!r.free) charge(r.chargedUsd);
   }
-  const { polls: _polls, ...receipt } = r;
-  return receipt;
-}
-
-export function createJob(requestId: string): Job & { polls: number; request_id: string } {
-  const job = { id: nextId('job'), status: 'queued' as const, result_ref: null, error: null, polls: 0, request_id: requestId };
-  state.jobs.set(job.id, job);
-  return job;
-}
-
-/** Async job simulation: queued → running → done over three polls. */
-export function pollJob(id: string): Job | null {
-  const j = state.jobs.get(id);
-  if (!j) return null;
-  j.polls += 1;
-  if (j.polls === 1) j.status = 'running';
-  if (j.polls >= 3) {
-    j.status = 'done';
-    j.result_ref = 'https://cdn.example.invalid/songs/demo.mp3';
-  }
-  return { id: j.id, status: j.status, result_ref: j.result_ref, error: j.error };
+  if (r.status === 'succeeded' && !r.free && r.polls >= 2 && !r.txHash) r.txHash = `0x${'7c'.repeat(32)}`;
+  return r;
 }
 
 /* ----------------------------------- seed ----------------------------------- */
 
-function seedChats(): void {
-  const c = createChat({ task_type: 'writing' });
-  c.title = 'Cover letter for Paystack';
-  c.current_model_id = 'openrouter:z-ai/glm-5.3-flash';
-  appendMessage(c.id, {
-    role: 'user',
-    content: 'Write a short cover letter for a payments engineer role at Paystack.',
-    attachments: [],
-    model_id: null,
-    request_id: null,
-    result_ref: null,
-    tokens: 18,
-    status: 'done',
-  });
-  appendMessage(c.id, {
-    role: 'assistant',
-    content: "Dear Hiring Team,\n\nI build payment flows people finish…",
-    attachments: [],
-    model_id: 'openrouter:z-ai/glm-5.3-flash',
-    request_id: null,
-    result_ref: null,
-    tokens: 120,
-    status: 'done',
-  });
-  c.spent = micro(900);
+function seedDemoChat(): void {
+  const chat = createChat({ taskType: 'writing', description: 'Write a LinkedIn post about launching on Tempo' });
+  chat.title = 'LinkedIn post about launching on Tempo';
+  chat.currentModelId = 'openrouter:z-ai/glm-5.3-flash';
+  appendMessage(chat.id, { role: 'user', text: 'Write a LinkedIn post about launching on Tempo', modelId: null, requestId: null, chargedUsd: null, files: [], status: 'done' });
+  const req = recordRequest({ status: 'succeeded', modelId: chat.currentModelId, label: 'GLM 5.3 Flash', chatId: chat.id, chargedUsd: 0.0009, refundedUsd: null, latencyMs: 1200, text: 'We just launched on Tempo 🚀 …', files: [], error: null, free: false, compareGroup: null });
+  appendMessage(chat.id, { role: 'assistant', text: 'We just launched on Tempo 🚀 Pay per use for 40+ AI models, no subscriptions, from anywhere.', modelId: chat.currentModelId, requestId: req.requestId, chargedUsd: 0.0009, files: [], status: 'done' });
+  chat.spentUsd = 0.0009;
 }
 
-seedChats();
+seedDemoChat();
