@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 import { ComingSoonTeasers } from '@/components/landing/ComingSoonTeasers';
 import { Hero } from '@/components/landing/Hero';
+import { LandingFx } from '@/components/landing/LandingFx';
 import { ProofStrip } from '@/components/landing/ProofStrip';
 import { SavingProof } from '@/components/landing/SavingProof';
 import { TaskChips } from '@/components/landing/TaskChips';
@@ -39,6 +40,7 @@ export default function HomePage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4">
+      <LandingFx />
       <header className="flex h-14 items-center justify-between">
         <span className="font-display text-base font-semibold text-text-0">
           Smart<span className="text-beam">Router</span>
