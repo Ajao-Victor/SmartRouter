@@ -1,5 +1,7 @@
 import { act, render, screen } from '@testing-library/react';
 
+import { micro } from '@/lib/money';
+
 import { useStreamStore } from '@/stores/streamStore';
 
 import { StreamText } from '../StreamText';
@@ -15,22 +17,18 @@ describe('StreamText', () => {
     expect(screen.getByText('code').tagName).toBe('CODE');
   });
 
-  it('appends tokens in order while streaming, then renders markdown on done', async () => {
+  it('grows plainly while deltas arrive, then renders markdown on done', async () => {
     useStreamStore.getState().start('m1');
     const { container } = render(<StreamText messageId="m1" content="" />);
-    await act(async () => {
-      useStreamStore.getState().appendTokens('m1', ['Hello', ' ']);
-      await new Promise((r) => requestAnimationFrame(() => { r(null); }));
-    });
-    await act(async () => {
-      useStreamStore.getState().appendTokens('m1', ['**world**']);
-      await new Promise((r) => requestAnimationFrame(() => { r(null); }));
+    act(() => {
+      useStreamStore.getState().append('m1', 'Hello ');
+      useStreamStore.getState().append('m1', '**world**');
     });
     const live = container.querySelector('p[aria-busy="true"]');
     expect(live).not.toBeNull();
     expect(live?.textContent).toBe('Hello **world**');
     act(() => {
-      useStreamStore.getState().done('m1');
+      useStreamStore.getState().done('m1', { chargedUsd: micro(0), latencyMs: 10, requestId: 'r', files: [], citations: [] });
     });
     expect((await screen.findByText('world')).tagName).toBe('STRONG');
   });
