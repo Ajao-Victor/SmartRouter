@@ -41,10 +41,11 @@ test.describe('demo path', () => {
     await page.keyboard.press('Escape');
     await expect(drawer).toBeHidden();
 
-    // Second turn from the composer: the Send button carries the quoted price
+    // Second turn from the composer: the quoted price shows beside Send (never on it)
     const message = page.getByLabel('Message');
     await message.fill('Make it two sentences shorter');
-    await expect(page.getByRole('button', { name: /Send · \$0\./ })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/^\$0\.\d+$/).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('button', { name: 'Send' })).toHaveText(/^Send$/);
     await message.press('Enter');
     await expect(page.getByLabel('Assistant reply').nth(1).getByRole('button', { name: 'Receipt' })).toBeVisible({ timeout: 20_000 });
 

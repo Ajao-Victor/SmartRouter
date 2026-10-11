@@ -12,6 +12,8 @@ import { AllocationControls } from '../AllocationControls';
 import { WaitlistForm } from '../WaitlistForm';
 import { WalletSheet } from '../WalletSheet';
 
+vi.mock('@/lib/tempo/walletActions', () => ({ TOKEN_SYMBOL: 'pathUSD', getTokenBalance: vi.fn().mockResolvedValue({ formatted: '12.50', usd: 12_500_000, decimals: 6, symbol: 'pathUSD' }), requestFaucet: vi.fn(), sendTokens: vi.fn(), mockDebit: vi.fn() }));
+
 const join = vi.fn();
 vi.mock('@/lib/api/endpoints', () => ({ api: { waitlist: { join: (i: unknown) => join(i) as Promise<void> } } }));
 

@@ -22,6 +22,7 @@ const msg = (over: Partial<Message> = {}): Message => ({
   requestId: 'req_1',
   createdAt: '2026-10-08T00:00:00Z',
   chargedUsd: micro(900),
+  seq: null,
   files: [],
   citations: [],
   status: 'done',

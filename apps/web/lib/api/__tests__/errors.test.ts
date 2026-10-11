@@ -10,7 +10,7 @@ describe('error semantics (PDF "Errors and edge cases")', () => {
     expect(toUiAction(err('FORBIDDEN'))).toEqual({ kind: 'wrong_wallet' });
     expect(toUiAction(err('ALLOCATION_EXHAUSTED', { details: { freeFallback: { available: true, remaining: 12 } } }))).toEqual({
       kind: 'top_up',
-      freeFallback: { available: true, remaining: 12, modelId: 'free:llama-3.1-8b' },
+      freeFallback: { available: true, remaining: 12, modelId: 'free:llama-3.1-8b', auto: false },
     });
     expect(toUiAction(err('PAYMENT_REQUIRED'))).toMatchObject({ kind: 'top_up' });
     expect(toUiAction(err('QUOTE_EXPIRED'))).toEqual({ kind: 'requote' });
@@ -27,7 +27,7 @@ describe('error semantics (PDF "Errors and edge cases")', () => {
   });
 
   it('describes actions with the PDF copy', () => {
-    expect(describeAction({ kind: 'top_up', freeFallback: { available: true, remaining: null, modelId: 'free:llama-3.1-8b' } })).toContain('Top up or Continue free');
+    expect(describeAction({ kind: 'top_up', freeFallback: { available: true, remaining: null, modelId: 'free:llama-3.1-8b', auto: false } })).toContain('Top up or Continue free');
     expect(describeAction({ kind: 'free_exhausted', scope: 'user' })).toBe('Free messages reset at 00:00 UTC');
     expect(describeAction({ kind: 'cooldown', seconds: 3 })).toContain('3 s');
     expect(describeAction({ kind: 'payment_cancelled' })).toContain('nothing was charged');

@@ -11,7 +11,7 @@ vi.mock('@/lib/api/endpoints', () => ({
 }));
 
 const msg = (id: string, model: string): Message => ({
-  id, role: 'assistant', text: `reply from ${model}`, modelId: model, requestId: `req_${id}`, createdAt: '2026-10-08T00:00:00Z', chargedUsd: micro(900), files: [], citations: [], status: 'done',
+  id, role: 'assistant', text: `reply from ${model}`, modelId: model, requestId: `req_${id}`, createdAt: '2026-10-08T00:00:00Z', chargedUsd: micro(900), seq: null, files: [], citations: [], status: 'done',
 });
 
 describe('CompareSplit', () => {
