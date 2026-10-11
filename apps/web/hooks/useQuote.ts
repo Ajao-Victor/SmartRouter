@@ -1,45 +1,28 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 
 import { api } from '@/lib/api/endpoints';
-import { queryKeys, QUOTE_TTL_MS } from '@/lib/api/keys';
-import type { QuoteInput, QuoteResponse, SliderPreset } from '@/lib/api/types';
-
-export interface QuoteArgs extends QuoteInput {
-  slider: SliderPreset;
-}
-
-function promptHash(prompt: string): string {
-  let h = 0;
-  for (let i = 0; i < prompt.length; i += 1) h = (h * 31 + prompt.charCodeAt(i)) | 0;
-  return `h${String(Math.abs(h))}`;
-}
+import type { Option, Quote, RecommendInput } from '@/lib/api/types';
 
 /**
- * Classify + rank + quote for the next turn (`POST /api/chats/:id/quote`, proposed).
- * Results are cached by (chat, prompt hash, model, slider) and garbage-collected after the
- * PDF's 5-minute validity. A quote past `expires_at` must never be submitted — re-quote.
+ * PDF "A normal turn": `POST /chats/:id/quote { prompt, modelId? }` returns `quoteId`,
+ * `priceUsd`, `free`, `expiresAt` (+ `suggestion`). The price goes on the Send button; a quote
+ * past `expiresAt` is never submitted — re-quote silently, confirm only if the price changed.
  */
 export function useQuote(chatId: string | null) {
-  const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ prompt, slider, model_id, attachments }: QuoteArgs) => {
+    mutationFn: ({ prompt, modelId }: { prompt: string; modelId?: string | null }): Promise<Quote> => {
       if (!chatId) throw new Error('useQuote: no chat');
-      return api.chats.quote(chatId, {
-        prompt,
-        slider,
-        ...(model_id ? { model_id } : {}),
-        ...(attachments ? { attachments } : {}),
-      });
+      return api.chats.quote(chatId, { prompt, ...(modelId ? { modelId } : {}) });
     },
-    onSuccess: (data: QuoteResponse, vars) => {
-      if (!chatId) return;
-      qc.setQueryData(queryKeys.quote(chatId, promptHash(vars.prompt), vars.model_id ?? null, vars.slider), data, {
-        updatedAt: Date.now(),
-      });
-      qc.setQueryDefaults(['quote'], { gcTime: QUOTE_TTL_MS, staleTime: 0 });
-    },
+  });
+}
+
+/** Options for a prompt (`POST /recommend`): 3 recommended models + the free option. */
+export function useRecommend() {
+  return useMutation({
+    mutationFn: (input: RecommendInput): Promise<Option[]> => api.catalog.recommend(input).then((r) => r.options),
   });
 }
 
