@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { isApiError } from '@/lib/api/client';
 import { queryKeys } from '@/lib/api/keys';
-import { closeSession, toPaymentError } from '@/lib/tempo/session';
+import { toPaymentError } from '@/lib/tempo/paymentErrors';
 
 import { useAllocationStore } from '@/stores/allocationStore';
 import { toast } from '@/stores/toastStore';
@@ -16,6 +16,7 @@ export function useCloseSession() {
     mutationFn: async () => {
       useAllocationStore.getState().beginClose();
       try {
+        const { closeSession } = await import('@/lib/tempo/session');
         await closeSession();
       } catch (err) {
         useAllocationStore.getState().settle();

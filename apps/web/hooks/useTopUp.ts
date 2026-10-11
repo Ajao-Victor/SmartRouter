@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isApiError } from '@/lib/api/client';
 import { queryKeys } from '@/lib/api/keys';
 import type { MicroUsd } from '@/lib/money';
-import { topUpSession, toPaymentError } from '@/lib/tempo/session';
+import { toPaymentError } from '@/lib/tempo/paymentErrors';
 import { getCurrentWallet } from '@/lib/tempo/wallet';
 
 import { useAllocationStore } from '@/stores/allocationStore';
@@ -25,6 +25,7 @@ export function useTopUp() {
       useAllocationStore.getState().beginTopUp();
       try {
         await wallet.preparePayments(useAllocationStore.getState().suggestedDepositUsd);
+        const { topUpSession } = await import('@/lib/tempo/session');
         await topUpSession(amountUsd);
       } catch (err) {
         throw toPaymentError(err) ?? err;

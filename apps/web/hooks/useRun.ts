@@ -10,7 +10,7 @@ import { queryKeys } from '@/lib/api/keys';
 import { runStream, type RunOutcome, type SseError } from '@/lib/api/sse';
 import { FREE_MODEL_ID, freeFallbackSchema, type FreeFallback, type Quote } from '@/lib/api/types';
 import { micro, type MicroUsd } from '@/lib/money';
-import { toPaymentError } from '@/lib/tempo/session';
+import { toPaymentError } from '@/lib/tempo/paymentErrors';
 import { getCurrentWallet } from '@/lib/tempo/wallet';
 
 import { optimisticMessage, useChatCache } from '@/hooks/useChat';
