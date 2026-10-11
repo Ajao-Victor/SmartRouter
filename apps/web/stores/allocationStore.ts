@@ -23,6 +23,8 @@ export interface AllocationState {
   paidRunsEnabled: boolean;
   /** `network.chainId` from `/sessions/current` — the chain the wallet client is built on. */
   chainId: number | null;
+  /** `network.token` — the escrow token (pathUSD on Moderato, USDC.e on mainnet). */
+  token: string | null;
   /** Deposit the user picked in the deposit dialog; null = `suggestedDepositUsd`. */
   chosenDepositUsd: MicroUsd | null;
 }
@@ -55,6 +57,7 @@ const initialState: AllocationState = {
   lastChargeUsd: zero,
   paidRunsEnabled: true,
   chainId: null,
+  token: null,
   chosenDepositUsd: null,
 };
 
@@ -82,6 +85,7 @@ export const useAllocationStore = create<AllocationState & AllocationActions>()(
       lastChargeUsd: prev.lastChargeUsd,
       paidRunsEnabled: current.paidRunsEnabled,
       chainId: current.network?.chainId ?? prev.chainId,
+      token: current.network?.token ?? prev.token,
     }));
   },
   setRemaining: (remainingUsd) => {
