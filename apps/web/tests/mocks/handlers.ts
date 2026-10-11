@@ -25,7 +25,6 @@ import {
   publicChat,
   publicRequest,
   recordRequest,
-  speedLabel,
   state,
   usage,
   weeklySpentUsd,
@@ -46,6 +45,13 @@ async function body<T>(req: Request): Promise<T> {
 }
 
 const sliderOf = (v: unknown): SliderPreset => (v === 'cheapest' || v === 'best' ? v : 'balanced');
+
+
+/** Live request record: `priceUsd` + `charged` boolean, `errorCode`, `finishedAt`. */
+function liveRequest(r: ReturnType<typeof publicRequest>) {
+  const { requestId, chargedUsd, refundedUsd, error, label: _label, txHash: _tx, ...rest } = r;
+  return { id: requestId, ...rest, priceUsd: r.status === 'failed' ? (refundedUsd ?? 0) : chargedUsd, charged: r.status !== 'failed', errorCode: error, finishedAt: r.status === 'succeeded' || r.status === 'failed' ? r.createdAt : null };
+}
 
 export const handlers = [
   /* ---------------------------------- auth --------------------------------- */
@@ -92,7 +98,8 @@ export const handlers = [
     const task = new URL(request.url).searchParams.get('taskType');
     const list = mockModels.filter((m) => !task || m.taskTypes.includes(task as TaskType));
     return HttpResponse.json({
-      models: list.map((m) => ({ modelId: m.modelId, label: m.label, provider: m.provider, taskTypes: m.taskTypes, priceUsd: m.priceUsd, quality: Math.max(...Object.values(m.quality)), speed: speedLabel(m.latency), free: m.free })),
+      // Live shape: `id`, `priceEstimateUsd`, `medianLatencyMs`, `quality` per task.
+      models: list.map((m) => ({ id: m.modelId, label: m.label, provider: m.provider, taskTypes: m.taskTypes, free: m.free, web: false, priceEstimateUsd: m.priceUsd, medianLatencyMs: m.latency, quality: m.quality })),
     });
   }),
   // Works signed out (Handover "Guest mode"): `guest: true` and nothing to pay against (`quoteId: null`).
@@ -127,7 +134,8 @@ export const handlers = [
     if (g) return g;
     const chat = state.chats.get(String(params.id));
     if (!chat || chat.archived) return error(404, 'NOT_FOUND', 'Chat not found');
-    return HttpResponse.json({ ...publicChat(chat), messages: chat.messages, nextBefore: null });
+    // Live shape: `{ chat, messages: [{ id, seq, role, content, modelId, resultRef, attachments, status, createdAt }], hasMore }`.
+    return HttpResponse.json({ chat: publicChat(chat), messages: chat.messages.map((m, i) => ({ id: m.id, seq: i + 1, role: m.role, content: m.text, modelId: m.modelId, resultRef: m.files[0]?.url ?? null, attachments: null, status: m.status, createdAt: m.createdAt })), hasMore: false });
   }),
   http.patch(url('/chats/:id'), async ({ params, request }) => {
     const g = guard();
@@ -190,7 +198,7 @@ export const handlers = [
   http.get(url('/requests'), () => {
     const g = guard();
     if (g) return g;
-    const requests = [...state.requests.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(publicRequest);
+    const requests = [...state.requests.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(liveRequest);
     return HttpResponse.json({ requests, nextCursor: null });
   }),
   http.get(url('/requests/:id'), ({ params }) => {
@@ -198,7 +206,7 @@ export const handlers = [
     if (g) return g;
     const r = pollRequest(String(params.id));
     if (!r) return error(404, 'NOT_FOUND', 'Request not found');
-    return HttpResponse.json(publicRequest(r));
+    return HttpResponse.json(liveRequest(r));
   }),
 
   /* -------------------------------- feedback -------------------------------- */

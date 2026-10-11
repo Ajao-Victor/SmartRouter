@@ -88,9 +88,10 @@ describe('mock API (live contract)', () => {
     const s = (await (await json('GET', '/sessions/current')).json()) as { session: { remainingUsd: number } | null; suggestedDepositUsd: number };
     expect(s.suggestedDepositUsd).toBe(2);
     expect(s.session?.remainingUsd).toBeCloseTo(2 - (paid?.priceUsd ?? 0), 6);
-    const r = (await (await json('GET', `/requests/${requestId}`)).json()) as { status: string; chargedUsd: number };
+    const r = (await (await json('GET', `/requests/${requestId}`)).json()) as { status: string; priceUsd: number; charged: boolean };
     expect(r.status).toBe('succeeded');
-    expect(r.chargedUsd).toBe(paid?.priceUsd);
+    expect(r.priceUsd).toBe(paid?.priceUsd);
+    expect(r.charged).toBe(true);
     // Same quote cannot be reused.
     expect((await json('POST', '/run', { quoteId: paid?.quoteId, prompt: 'Write a cover letter' })).status).toBe(409);
   }, 15_000);
