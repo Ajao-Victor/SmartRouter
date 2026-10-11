@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * E2E on mocks. By default boots its own `next dev` on port 3100 with a separate build dir
- * (`.next-e2e`) so it never collides with a developer's `pnpm dev` on 3000.
+ * (`.next-e2e`) so it never collides with a developer's `pnpm dev` on 3300.
  * Override with E2E_PORT / PLAYWRIGHT_BASE_URL.
  */
 const port = Number(process.env.E2E_PORT ?? 3100);
@@ -30,6 +30,13 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    env: { NEXT_PUBLIC_MOCK: '1', NEXT_PUBLIC_TEMPO_NETWORK: 'testnet', NEXT_DIST_DIR: '.next-e2e' },
+    env: {
+      NEXT_PUBLIC_MOCK: '1',
+      NEXT_PUBLIC_API_URL: 'http://localhost:8787',
+      NEXT_PUBLIC_TEMPO_NETWORK: 'moderato',
+      NEXT_PUBLIC_CHAIN_ID: '42431',
+      NEXT_PUBLIC_RPC_URL: 'https://rpc.moderato.tempo.xyz',
+      NEXT_DIST_DIR: '.next-e2e',
+    },
   },
 });
