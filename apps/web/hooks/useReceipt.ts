@@ -5,13 +5,11 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api/endpoints';
 import { queryKeys } from '@/lib/api/keys';
 
-const POLL_MS = 20_000;
-const MAX_POLL_MS = 2 * 60 * 60 * 1000;
+const POLL_MS = 5_000;
 
 /**
- * Receipt for a request (`GET /api/requests/:id`, proposed). The session id is available
- * immediately; the tx hash appears after settlement (PDF: every $1 or hourly), so we poll every
- * 20 s for up to 2 h until it arrives.
+ * A run and what it charged (`GET /requests/:id`). Refunds appear here. Pending/running runs
+ * are polled every 5 s (PDF `pending`) until `succeeded` or `failed`.
  */
 export function useReceipt(requestId: string | null) {
   return useQuery({
@@ -19,10 +17,18 @@ export function useReceipt(requestId: string | null) {
     queryFn: ({ signal }) => api.requests.get(requestId ?? '', signal),
     enabled: requestId !== null,
     refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data || data.tx_hash || data.is_free) return false;
-      if (Date.now() - Date.parse(data.created_at) > MAX_POLL_MS) return false;
-      return POLL_MS;
+      const s = query.state.data?.status;
+      return s === 'pending' || s === 'running' ? POLL_MS : false;
     },
+  });
+}
+
+/** Activity list (`GET /requests?cursor=`, first page). */
+export function useRequests(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.requests(),
+    queryFn: ({ signal }) => api.requests.list(null, signal),
+    enabled,
+    staleTime: 15_000,
   });
 }
