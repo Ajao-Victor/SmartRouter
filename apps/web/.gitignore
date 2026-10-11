@@ -9,3 +9,4 @@ test-results/
 .env*.local
 *.tsbuildinfo
 next-env.d.ts
+.next-live/
