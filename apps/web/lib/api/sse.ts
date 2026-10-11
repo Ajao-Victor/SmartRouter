@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 import { ApiError, apiUrl, errorFromFetchFailure, errorFromResponse, isApiError } from '@/lib/api/client';
 import { RUN_PATH } from '@/lib/api/endpoints';
-import { fileSchema, usdSchema, type RunInput } from '@/lib/api/types';
+import { fileSchema, usageSchema, usdSchema, type RunInput } from '@/lib/api/types';
 import { micro } from '@/lib/money';
 import { toPaymentError } from '@/lib/tempo/paymentErrors';
 
@@ -29,6 +29,7 @@ const meta = z.object({
   userMessageId: z.string().nullish(),
   assistantMessageId: z.string().nullish(),
   remainingUsd: usdSchema.nullish(),
+  usage: usageSchema.nullish(),
 });
 const delta = z.object({ text: z.string() });
 const fallback = z.object({ fromModelId: z.string(), toModelId: z.string(), label: z.string().default(''), reason: z.string().default('') });
@@ -40,6 +41,7 @@ const done = z.object({
   citations: z.array(z.unknown()).default([]),
   chargedUsd: usdSchema.default(0),
   latencyMs: z.number().nullish(),
+  usage: usageSchema.nullish(),
 });
 const pending = z.object({ requestId: z.string(), pollUrl: z.string() });
 const error = z.object({
