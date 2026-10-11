@@ -4,25 +4,19 @@ import { useState } from 'react';
 
 import { useRouter } from 'next/navigation';
 
-import { motion } from 'motion/react';
+import { clsx } from 'clsx';
+import { ArrowUp } from 'lucide-react';
 
 import { isApiError } from '@/lib/api/client';
 import { TASK_TYPES, type TaskType } from '@/lib/api/types';
 import { env } from '@/lib/env';
-import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';
-import { fadeUp, stagger, withReduced } from '@/lib/motion/variants';
 
 import { useCreateChat } from '@/hooks/useChats';
+import { useMe } from '@/hooks/useMe';
 import { useComposerStore } from '@/stores/composerStore';
 import { toast } from '@/stores/toastStore';
 
-
-import { burstAt, useParticleBurst } from '@/components/fx/ParticleBurst';
-import { Chip } from '@/components/ui/Chip';
-import { Textarea } from '@/components/ui/Input';
-import { MagneticButton } from '@/components/ui/MagneticButton';
-
-const LABEL: Record<TaskType, string> = {
+export const TASK_LABEL: Record<TaskType, string> = {
   chat: 'Chat',
   writing: 'Writing',
   coding: 'Coding',
@@ -38,71 +32,60 @@ export interface NewChatProps {
 }
 
 /**
- * PDF "New chat": pick a category (chat, writing, coding, research, translation, image, music)
- * or describe the task. A description is classified and quoted as the first prompt, so the
- * user can run it straight away — we navigate with `?first=1` and the workspace auto-quotes.
+ * PDF "New chat": pick a category or describe the task. `POST /chats { taskType?, description?,
+ * slider? }` answers with the chat id and the options for the description, which the workspace
+ * shows as the first thing to pick.
  */
 export function NewChat({ initialCategory = null }: NewChatProps) {
   const router = useRouter();
-  const reduced = useReducedMotionSafe();
-  const burst = useParticleBurst();
+  const me = useMe();
   const category = useComposerStore((s) => s.category);
   const setCategory = useComposerStore((s) => s.setCategory);
+  const sliderOverride = useComposerStore((s) => s.sliderOverride);
   const [draft, setDraft] = useState('');
   const create = useCreateChat();
   const selected = category ?? initialCategory;
+  const description = draft.trim();
 
-  const start = async (e?: { clientX: number; clientY: number }) => {
-    const prompt = draft.trim();
-    if (!prompt && !selected) {
+  const start = async () => {
+    if (!description && !selected) {
       toast.warn('Pick a category or describe the task');
       return;
     }
+    const slider = sliderOverride ?? me.data?.slider;
     try {
-      const chat = await create.mutateAsync({
-        ...(selected ? { task_type: selected } : {}),
-        ...(prompt ? { first_prompt: prompt } : {}),
+      const res = await create.mutateAsync({
+        ...(selected ? { taskType: selected } : {}),
+        ...(description ? { description } : {}),
+        ...(slider ? { slider } : {}),
       });
-      if (e) burst(burstAt(e, '#19E6C1', 60));
-      useComposerStore.getState().setDraft(prompt);
-      router.push(prompt ? `/chat/${chat.id}?first=1` : `/chat/${chat.id}`);
+      const composer = useComposerStore.getState();
+      composer.setDraft('');
+      composer.selectModel(null);
+      composer.setPendingOptions(description && res.options.length > 0 ? { chatId: res.chatId, prompt: description, options: res.options } : null);
+      if (description && res.options.length === 0) composer.setDraft(description);
+      router.push(`/chat/${res.chatId}`);
     } catch (err) {
       toast.error('Could not start the chat', isApiError(err) ? err.message : undefined);
     }
   };
 
   return (
-    <motion.section
-      variants={withReduced(stagger({ each: 0.06 }), reduced)}
-      initial="hidden"
-      animate="visible"
-      className="space-y-5"
-    >
-      <motion.div variants={withReduced(fadeUp, reduced)} className="space-y-1">
-        <p className="num text-2xs tracking-label text-text-2 uppercase">New chat</p>
-        <h1 className="font-display text-display-sm text-text-0">
-          What do you want <span className="text-beam">done</span>?
-        </h1>
-      </motion.div>
+    <section className="space-y-6">
+      <div className="space-y-1">
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-text-0 sm:text-3xl">What do you want done?</h1>
+        <p className="text-sm text-text-2">Describe the task. SmartRouter quotes the best models for it before anything runs.</p>
+      </div>
 
-      <motion.div variants={withReduced(fadeUp, reduced)} className="flex flex-wrap gap-2" aria-label="Task categories">
-        {TASK_TYPES.filter((t) => t !== 'music' || env.flagMusic).map((t) => (
-          <Chip
-            key={t}
-            tone={t === 'research' ? 'teal' : 'accent'}
-            selected={selected === t}
-            onClick={() => {
-              setCategory(selected === t ? null : t);
-            }}
-          >
-            {LABEL[t]}
-          </Chip>
-        ))}
-      </motion.div>
-
-      <motion.div variants={withReduced(fadeUp, reduced)} className="space-y-3">
-        <Textarea
-          label="Or describe the task"
+      <form
+        className="rounded-xl bg-bg-1 shadow-hairline-strong transition-[box-shadow] focus-within:shadow-glow-accent"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void start();
+        }}
+      >
+        <textarea
+          aria-label="Describe the task"
           placeholder="Write a cover letter for a payments engineer role at Paystack…"
           value={draft}
           rows={3}
@@ -110,27 +93,44 @@ export function NewChat({ initialCategory = null }: NewChatProps) {
             setDraft(e.target.value);
           }}
           onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               void start();
             }
           }}
+          className="w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-base leading-6 text-text-0 outline-none placeholder:text-text-2"
         />
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-text-2">
-            {draft.trim() ? 'Your description is classified and quoted as the first prompt.' : 'Pick a category, or describe it and we classify it for you.'}
-          </p>
-          <MagneticButton
-            size="md"
-            loading={create.isPending}
-            onClick={(e) => {
-              void start(e);
-            }}
+        <div className="flex items-center justify-between gap-3 px-2 pb-2">
+          <p className="px-2 text-xs text-text-2">{description ? 'You pick the model next — nothing runs before you see the price.' : 'Or just pick a category below.'}</p>
+          <button
+            type="submit"
+            disabled={create.isPending || (!description && !selected)}
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-accent px-3 text-sm font-medium text-text-inverse transition-colors hocus:bg-accent-hi disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {draft.trim() ? 'Get a quote' : 'Start chat'}
-          </MagneticButton>
+            {create.isPending ? 'Starting…' : description ? 'Get options' : 'Start chat'}
+            <ArrowUp size={16} aria-hidden="true" />
+          </button>
         </div>
-      </motion.div>
-    </motion.section>
+      </form>
+
+      <div className="flex flex-wrap gap-2" aria-label="Task categories">
+        {TASK_TYPES.filter((t) => t !== 'music' || env.flagMusic).map((t) => (
+          <button
+            key={t}
+            type="button"
+            aria-pressed={selected === t}
+            onClick={() => {
+              setCategory(selected === t ? null : t);
+            }}
+            className={clsx(
+              'h-9 rounded-pill px-3.5 text-sm transition-colors',
+              selected === t ? 'bg-accent/20 text-text-0 shadow-hairline-strong' : 'bg-bg-1 text-text-1 shadow-hairline hocus:bg-bg-2 hocus:text-text-0',
+            )}
+          >
+            {TASK_LABEL[t]}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
