@@ -1,12 +1,12 @@
 import { env } from '@/lib/env';
 
 /**
- * Tempo explorer links (Backend_Gaps_Report §10.3: base URLs unconfirmed — placeholders).
+ * Tempo explorer links (PDF: explore.tempo.xyz for mainnet, explore.testnet.tempo.xyz for Moderato).
  * Every hash/address is regex-validated before it is rendered or linked (security.md §4).
  */
 const BASES: Record<typeof env.network, string> = {
-  testnet: 'https://explore.testnet.tempo.xyz',
-  mainnet: 'https://explore.tempo.xyz',
+  tempo: 'https://explore.tempo.xyz',
+  moderato: 'https://explore.testnet.tempo.xyz',
 };
 
 export const TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/;
