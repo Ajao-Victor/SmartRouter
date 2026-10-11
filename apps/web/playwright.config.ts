@@ -29,7 +29,8 @@ export default defineConfig({
     command: `pnpm exec next dev -p ${String(port)}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    // Privy makes the first compile of `/` slow on a cold dev server (minutes on a laptop).
+    timeout: 420_000,
     env: {
       NEXT_PUBLIC_MOCK: '1',
       NEXT_PUBLIC_API_URL: 'http://localhost:8787',
