@@ -62,7 +62,7 @@ export default defineConfig(
       ],
       'no-restricted-properties': [
         'error',
-        { object: 'window', property: 'ethereum', message: 'All wallet UX goes through the Tempo Accounts SDK.' },
+        { object: 'window', property: 'ethereum', message: 'Wallet access goes through viem/tempo passkey accounts (lib/tempo).' },
         { object: 'window', property: 'localStorage', message: 'Use the IndexedDB helper or Zustand (rules.md §3).' },
       ],
     },
@@ -72,7 +72,7 @@ export default defineConfig(
   },
   {
     // No automatic top-ups, ever (PDF). Timers may not call session code.
-    files: ['lib/tempo/session/**/*.ts', 'hooks/useTopUp.ts'],
+    files: ['lib/tempo/session.ts', 'hooks/useTopUp.ts', 'hooks/useCloseSession.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',
