@@ -39,32 +39,40 @@ export default function HomePage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl px-4">
+    <>
       <LandingFx />
-      <header className="flex h-14 items-center justify-between">
-        <span className="font-display text-base font-semibold text-text-0">
-          Smart<span className="text-beam">Router</span>
-        </span>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onSignIn} loading={auth.signIn.isPending}>
-            Sign in
-          </Button>
-          <Button size="sm" variant="secondary" onClick={openApp} loading={navigating}>
-            Open app
-          </Button>
-        </div>
-      </header>
-      <main className="space-y-20 pb-24">
-        <Hero onSignIn={onSignIn} signingIn={auth.signIn.isPending} onStart={openApp} starting={navigating} />
-        <TaskChips />
-        <SavingProof />
-        <ProofStrip />
-        <ComingSoonTeasers />
-      </main>
-      <footer className="flex flex-col gap-2 border-t border-line py-8 text-xs text-text-2 sm:flex-row sm:items-center sm:justify-between">
-        <Attribution />
-        <p>Models available via MPP · Fees sponsored on Tempo · You only spend USDC.e</p>
-      </footer>
-    </div>
+      {/* The field layers are fixed at z-field (0); the content sits above them. */}
+      <div className="relative z-content mx-auto max-w-5xl px-4">
+        <header className="flex h-14 items-center justify-between">
+          <span className="font-display text-base font-semibold text-text-0">
+            Smart<span className="text-beam">Router</span>
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={onSignIn} loading={auth.signIn.isPending}>
+              Sign in
+            </Button>
+            <Button size="sm" variant="secondary" onClick={openApp} loading={navigating}>
+              Open app
+            </Button>
+          </div>
+        </header>
+        <main className="space-y-20 pb-24">
+          <Hero
+            onSignIn={onSignIn}
+            signingIn={auth.signIn.isPending}
+            onStart={openApp}
+            starting={navigating}
+          />
+          <TaskChips />
+          <SavingProof />
+          <ProofStrip />
+          <ComingSoonTeasers />
+        </main>
+        <footer className="flex flex-col gap-2 border-t border-line py-8 text-xs text-text-2 sm:flex-row sm:items-center sm:justify-between">
+          <Attribution />
+          <p>Models available via MPP · Fees sponsored on Tempo · You only spend USDC.e</p>
+        </footer>
+      </div>
+    </>
   );
 }
