@@ -43,8 +43,8 @@ describe('accessibility (axe, serious/critical only)', () => {
       <main>
         <ModelOptions
           options={[
-            { modelId: 'a', label: 'GLM 5.3 Flash', provider: 'OpenRouter', quoteId: 'q', priceUsd: micro(900), speed: 'fast', reason: 'r', free: false, quality: 0.8, bestQuality: false, expiresAt: null },
-            { modelId: 'f', label: 'Free · Llama 3.1 8B', provider: 'CF', quoteId: null, priceUsd: micro(0), speed: 'fast', reason: 'r', free: true, quality: 0.5, bestQuality: false, expiresAt: null },
+            { modelId: 'a', label: 'GLM 5.3 Flash', provider: 'OpenRouter', quoteId: 'q', priceUsd: micro(900), speed: 'fast', reason: 'r', free: false, quality: 0.8, score: null, bestQuality: false, expiresAt: null },
+            { modelId: 'f', label: 'Free · Llama 3.1 8B', provider: 'CF', quoteId: null, priceUsd: micro(0), speed: 'fast', reason: 'r', free: true, quality: 0.5, score: null, bestQuality: false, expiresAt: null },
           ]}
           onPick={vi.fn()}
         />

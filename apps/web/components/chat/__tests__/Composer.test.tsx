@@ -13,7 +13,7 @@ beforeEach(() => {
 });
 
 describe('Composer', () => {
-  it('puts the quoted price on Send and sends on Enter', () => {
+  it('shows the quoted price beside Send (never on it) and sends on Enter', () => {
     const onSend = vi.fn();
     const { rerender } = render(<Composer quote={null} currentModel={null} onSend={onSend} />);
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
@@ -21,7 +21,8 @@ describe('Composer', () => {
     expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
 
     rerender(<Composer quote={{ priceUsd: micro(900), free: false }} currentModel={{ label: 'GLM 5.3 Flash', isFree: false }} onSend={onSend} />);
-    expect(screen.getByRole('button', { name: 'Send · $0.0009' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveTextContent(/^Send$/);
+    expect(screen.getByText('$0.0009')).toBeInTheDocument();
     fireEvent.keyDown(screen.getByLabelText('Message'), { key: 'Enter' });
     expect(onSend).toHaveBeenCalledWith('Write a poem');
 
@@ -32,7 +33,9 @@ describe('Composer', () => {
   it('labels free quotes and shows Stop while running', () => {
     const onStop = vi.fn();
     const { rerender } = render(<Composer quote={{ priceUsd: micro(0), free: true }} currentModel={{ label: 'Free · Llama 3.1 8B', isFree: true }} onSend={vi.fn()} />);
-    expect(screen.getByRole('button', { name: 'Send · Free' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'hi' } });
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveTextContent(/^Send$/);
+    expect(screen.getByText('Free')).toBeInTheDocument();
     rerender(<Composer quote={null} running currentModel={null} onSend={vi.fn()} onStop={onStop} />);
     fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
     expect(onStop).toHaveBeenCalled();

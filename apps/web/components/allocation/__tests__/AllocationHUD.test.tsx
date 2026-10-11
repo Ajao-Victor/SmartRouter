@@ -11,8 +11,8 @@ import { LowBalanceBanner } from '../LowBalanceBanner';
 
 const current = (remainingUsd: number): SessionsCurrent => ({
   suggestedDepositUsd: micro(2_000_000),
-  network: 'moderato',
-  session: { depositUsd: micro(2_000_000), spentUsd: micro(2_000_000 - remainingUsd), remainingUsd: micro(remainingUsd), requests: 1, channelId: 'ch', status: 'open', openedAt: null },
+  paidRunsEnabled: true, network: null, usage: null,
+  session: { depositUsd: micro(2_000_000), spentUsd: micro(2_000_000 - remainingUsd), remainingUsd: micro(remainingUsd), requests: 1, channelId: 'ch', status: 'open', openedAt: null, settledUsd: micro(0), lastUsedAt: null },
 });
 
 beforeEach(() => {

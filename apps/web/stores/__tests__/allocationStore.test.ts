@@ -4,12 +4,14 @@ import { micro } from '@/lib/money';
 import { selectCanAfford, selectIsLow, selectIsUsed, selectRemainingPct, useAllocationStore } from '../allocationStore';
 
 const current = (over: Partial<NonNullable<SessionsCurrent['session']>> | null = {}): SessionsCurrent => ({
+  paidRunsEnabled: true,
   suggestedDepositUsd: micro(2_000_000),
-  network: 'moderato',
+  network: null,
+  usage: null,
   session:
     over === null
       ? null
-      : { depositUsd: micro(2_000_000), spentUsd: micro(0), remainingUsd: micro(2_000_000), requests: 0, channelId: 'ch_1', status: 'open', openedAt: null, ...over },
+      : { depositUsd: micro(2_000_000), spentUsd: micro(0), remainingUsd: micro(2_000_000), requests: 0, channelId: 'ch_1', status: 'open', openedAt: null, settledUsd: micro(0), lastUsedAt: null, ...over },
 });
 
 beforeEach(() => {

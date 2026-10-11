@@ -12,6 +12,8 @@ import { AllocationControls } from '../AllocationControls';
 import { WaitlistForm } from '../WaitlistForm';
 import { WalletSheet } from '../WalletSheet';
 
+vi.mock('@/lib/tempo/walletActions', () => ({ TOKEN_SYMBOL: 'pathUSD', getTokenBalance: vi.fn().mockResolvedValue({ formatted: '12.50', usd: 12_500_000, decimals: 6, symbol: 'pathUSD' }), requestFaucet: vi.fn(), sendTokens: vi.fn(), mockDebit: vi.fn() }));
+
 const join = vi.fn();
 vi.mock('@/lib/api/endpoints', () => ({ api: { waitlist: { join: (i: unknown) => join(i) as Promise<void> } } }));
 
@@ -24,7 +26,7 @@ function wrap(ui: React.ReactElement) {
   );
 }
 
-const user = { address: '0x7a3f9c1e5b2d4a6f8e0c1b3d5f7a9c2e4b6d8f01', slider: 'balanced' as const, allocationUsd: micro(2_000_000), weeklyLimitUsd: micro(10_000_000), autoFreeFallback: true, freeRemaining: null };
+const user = { address: '0x7a3f9c1e5b2d4a6f8e0c1b3d5f7a9c2e4b6d8f01', slider: 'balanced' as const, allocationUsd: micro(2_000_000), weeklyLimitUsd: micro(10_000_000), autoFreeFallback: true, freeRemaining: null, id: null, email: null, country: null, usage: null };
 
 describe('WaitlistForm', () => {
   it('validates the email and posts email, country and interest', async () => {
@@ -61,23 +63,25 @@ describe('WalletSheet (payment session)', () => {
     useUiStore.setState({ walletSheetOpen: true, sdkDialogOpen: false });
   });
 
-  it('explains the first deposit when there is no session', () => {
+  it('explains that the first paid message deposits when there is no session', () => {
     const onTopUp = vi.fn();
     wrap(<WalletSheet user={user} onTopUp={onTopUp} onCloseSession={vi.fn()} onSignOut={vi.fn()} onSettings={vi.fn()} />);
     expect(screen.getByText(/No deposit yet/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Deposit $2' }));
-    expect(onTopUp).toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Close and withdraw' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Get test funds' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Top up/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Withdraw' })).toBeNull();
+    expect(onTopUp).not.toHaveBeenCalled();
   });
 
   it('shows deposit, spent, remaining and offers Top up and Close on an open session', () => {
-    useAllocationStore.getState().hydrate({ suggestedDepositUsd: micro(2_000_000), network: 'moderato', session: { depositUsd: micro(2_000_000), spentUsd: micro(500_000), remainingUsd: micro(1_500_000), requests: 3, channelId: 'ch', status: 'open', openedAt: null } });
+    useAllocationStore.getState().hydrate({ suggestedDepositUsd: micro(2_000_000), paidRunsEnabled: true, network: null, usage: null, session: { depositUsd: micro(2_000_000), spentUsd: micro(500_000), remainingUsd: micro(1_500_000), requests: 3, channelId: 'ch', status: 'open', openedAt: null, settledUsd: micro(0), lastUsedAt: null } });
     const onClose = vi.fn();
     wrap(<WalletSheet user={user} onTopUp={vi.fn()} onCloseSession={onClose} onSignOut={vi.fn()} onSettings={vi.fn()} />);
     expect(screen.getByText('$0.50')).toBeInTheDocument();
     expect(screen.getByText('$1.50')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Top up $2' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Close and withdraw' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Withdraw' }));
     expect(onClose).toHaveBeenCalled();
   });
 });

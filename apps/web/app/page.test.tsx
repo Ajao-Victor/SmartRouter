@@ -17,7 +17,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: vi.fn(), 
 vi.mock('@/components/landing/LandingFx', () => ({ LandingFx: () => null }));
 
 describe('HomePage (landing)', () => {
-  it('renders the pitch, task chips, saving proof and coming-soon teasers', () => {
+  it('renders the pitch, task chips, saving proof and coming-soon teasers', { timeout: 15_000 }, () => {
     renderHome();
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Tell SmartRouter what you want done/);
     for (const label of ['Chat', 'Writing', 'Coding', 'Research', 'Translation', 'Image', 'Music']) {

@@ -5,7 +5,7 @@ import { micro } from '@/lib/money';
 
 import { ModelOptions } from '../ModelOptions';
 
-const opt = (over: Partial<Option>): Option => ({ modelId: 'm', label: 'M', provider: 'P', quoteId: 'q', priceUsd: micro(900), speed: 'fast', reason: '80% of the best quality at 1/34 of the price', free: false, quality: 0.8, bestQuality: false, expiresAt: null, ...over });
+const opt = (over: Partial<Option>): Option => ({ modelId: 'm', label: 'M', provider: 'P', quoteId: 'q', priceUsd: micro(900), speed: 'fast', reason: '80% of the best quality at 1/34 of the price', free: false, quality: 0.8, score: null, bestQuality: false, expiresAt: null, ...over });
 
 describe('ModelOptions (PDF options list)', () => {
   it('renders the three recommended models plus the free option with price, speed, reason and attribution', () => {
