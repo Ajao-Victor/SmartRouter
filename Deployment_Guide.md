@@ -71,6 +71,13 @@ values for local development (gitignored).
 
 ## 5. First deploy checklist
 
+> **Build fails with `Invalid public environment … NEXT_PUBLIC_API_URL: Required`?** The four variables
+> are missing in the Vercel project. `lib/env.ts` validates them at build time on purpose: `NEXT_PUBLIC_*`
+> values are inlined into the bundle, so a build without them can only produce a broken or wrong-network
+> app. Run `bash apps/web/scripts/vercel-env.sh` (after `npx vercel link`) to push the PDF values for
+> production and the `staging` preview, then redeploy.
+
+
 1. Push `main` (and `staging`). Vercel builds both.
 2. Add the custom domains: `app.<domain>` → production, `staging.<domain>` → the `staging` branch.
 3. On Heroku, set `APP_ORIGINS` on each API app to the matching frontend origin
