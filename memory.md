@@ -6,10 +6,12 @@
 
 ## Project snapshot
 
-- **Product:** SmartRouter — AI model marketplace; pay per use from an embedded Tempo wallet via MPP. Source of truth: `SmartRouter — Build Architecture 2.pdf` (Oct 7, 2026, @0xAristos).
+- **Product:** SmartRouter — AI model marketplace; pay per use from a Tempo passkey wallet via MPP (`mppx`). **Source of truth for the backend: `SmartRouter Frontend Architecture.pdf` (Oct 9, 2026)** — it supersedes the Oct 7 build architecture and every *(proposed)* endpoint in the earlier docs.
 - **Repo:** https://github.com/Ajao-Victor/SmartRouter (remote `origin`, branch `main`).
 - **Deadline:** live by Oct 11, 2026; submission Oct 12, 2026 (Colosseum). Docs generated Oct 8, 2026.
-- **Frontend home:** `apps/web` (Next.js + Tailwind, mobile-first, PWA later), calling the Hono API.
+- **Frontend home:** `apps/web` (Next.js 15 + Tailwind 4), calling the API directly (no Vercel rewrites). Dev server: `pnpm dev` → http://localhost:3300 (e2e uses 3100).
+- **Live backends (PDF):** testnet `https://smartrouter-testnet-8f580f845259.herokuapp.com` (Moderato, chain 42431, pathUSD faucet, mock model text, real payments); mainnet `https://smartrouter-mainnet-9d3c469b9ffd.herokuapp.com` (chain 4217, USDC.e). Vercel: `main` = mainnet, `staging` = testnet; see `Deployment_Guide.md`.
+- **Authorship:** commits by Victor Oluwatimileyin Ajao only; no AI attribution trailers from 2026-10-10 on. The 45 earlier `Co-Authored-By` trailers are stripped by the owner with: `FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --env-filter 'export GIT_AUTHOR_NAME="Victor Oluwatimileyin Ajao"; export GIT_COMMITTER_NAME="Victor Oluwatimileyin Ajao"' --msg-filter 'perl -0pe "s/\n+Co-Authored-By:[^\n]*Claude[^\n]*//gi; s/\s+\z/\n/"' -- main && git push --force-with-lease origin main` (backup branch `backup/pre-rewrite-2026-10-10`).
 - **Cut order if slipping:** Compare mode, then music (feature flags `NEXT_PUBLIC_FLAG_COMPARE`, `NEXT_PUBLIC_FLAG_MUSIC`).
 
 ## Fixed numbers (from PDF — never change without a PDF update)
@@ -43,9 +45,12 @@
 | Phase 1 Setup | ✅ Tasks 1–8 done (Oct 8, 2026) |
 | Phase 2 Core UI | ✅ Tasks 9–17 done (Oct 8, 2026) |
 | Phase 3 Integration | ✅ Tasks 18–25 done (Oct 8, 2026) |
-| Phase 4 Polish | ✅ Tasks 26–29 done (Oct 8, 2026) — all 29 tasks complete |
+| Phase 4 Polish | ✅ Tasks 26–29 done (Oct 8, 2026) |
+| Phase 5 Live backend + redesign + Vercel | ✅ Tasks 30–34 done (Oct 10–11, 2026) — see `Tasks.md` Phase 5 |
 
 ## Completed features
+
+- **Tasks 30–34 (2026-10-10 → 11) — live backend, chat redesign, Vercel.** Contract rebuilt from `SmartRouter Frontend Architecture.pdf`: no `/api` prefix, USD decimals parsed to micro-USD, uppercase `{ code, message, details? }` errors, `/auth/challenge` → sign → `/auth/verify` (7-day `sr_session` cookie), `GET /me` 401 = signed out, `POST /chats { taskType?, description?, slider? }` → quoted options (top 2 + best quality + free), `POST /chats/:id/quote` → price on Send (5-min quote tied to the exact prompt; expired → re-quote quietly, confirm only if the price changed), `POST /run` over SSE (`meta`, `delta`, `fallback`, `pending` → poll `GET /requests/:id` every 5 s, `done { chargedUsd }`, `error { refunded, freeRerun }`, `:` heartbeats, 60 s watchdog), `/sessions/current` mirrored into the allocation store, `/requests`, `/feedback { requestId, rating: 1|-1 }`, `/compare/vote`, `PATCH /me/settings` (USD). Payments: viem `tempoModerato`/`tempo` chain, passkey root account (`viem/tempo` WebAuthnP256), non-extractable WebCrypto P-256 access key authorized by the root (30 days), `mppx` `sessionManager({ account: accessKey, client, allowedChainIds, maxDeposit: suggestedDepositUsd, fetch: credentialed })` with a paid-run queue; `manager.topUp` (click only) and `manager.close`; mppx client errors mapped (`exceeds local maxDeposit` → ALLOCATION_EXHAUSTED, in flight → SESSION_BUSY, rejected → PAYMENT_CANCELLED). UI: chat routes stripped of WebGL/particles/HoloCards/glitch (landing keeps them via `LandingFx`); plain thread, single composer, options rows, model picker sheet, inline Top up / Continue free, low-balance banner, wallet sheet = payment session, Activity page, static top bar. Mocks (`tests/mocks`) reimplement the whole contract (incl. mock-only `/mock/session/top-up|close`). Vercel: `.env.example` (4 PDF vars), CSP = API + RPC + Sentry, `vercel.json`, `Deployment_Guide.md`. Verified: lint, typecheck, 123 unit tests, e2e, guard:hosts, production build.
 
 - **Task 29 (2026-10-08) — README, PWA manifest, final ledger.** Root `README.md` (pitch, ASCII money-flow diagram from `architecture.md` §1, repo map, run/check commands incl. e2e recording, feature flags, LMArena CC-BY-4.0 / Artificial Analysis attribution, free-model sponsorship note). PWA: `public/manifest.webmanifest` (standalone, portrait, `#05060a`, shortcuts New chat / Settings), icons under `public/icons/` (router-orb SVG + maskable SVG, PNGs 192/512/maskable/apple-touch rasterised from the SVGs with Chromium), linked from the root layout (`manifest`, `icons`, `appleWebApp`); no service worker (MSW's worker is dev-only; offline shell is a later PDF item). `Tasks.md`: all 29 statuses `done` with commit lists. Verified: lint, typecheck, 145 tests, guard:hosts, production build (`scripts/ci.sh`).
 
@@ -109,6 +114,11 @@
 
 | Date | Decision | Why |
 |---|---|---|
+| 2026-10-11 | Draft is quoted while typing (700 ms debounce) and Send runs the held quote; a re-quote that raises the price asks for one more press | PDF: price on the Send button, expired quotes re-quoted quietly, confirm only when the price changed |
+| 2026-10-11 | Attachments removed from the composer | `POST /run` takes `{ quoteId, prompt }` only; no upload route exists in the PDF |
+| 2026-10-11 | Balances, deposit/swap screens and the spend-permission card removed | The PDF pays through `mppx` sessions: the first paid run deposits, `topUp`/`close` are the only wallet actions; funding happens in the Tempo wallet |
+| 2026-10-11 | Access key (WebCrypto P-256) authorized once by the passkey root account | PDF: one approval per deposit, vouchers signed silently by `authorizedSigner`; `mppx` resolves `account.accessKeyAddress` as the signer |
+| 2026-10-10 | Chat routes carry no WebGL/particle/spring effects; landing keeps them | User brief: minimalist, Claude-like chat with maximum readability |
 | 2026-10-09 | `.env.example` ships `NEXT_PUBLIC_MOCK=1`; `apiUnreachableHint()` names the API URL and the mock switch in dev | With `0` and no Hono API on 8787 every click failed with a refused connection and looked like dead routing |
 | 2026-10-09 | Landing buttons prefetch `/chat` and run navigation in `useTransition` with a pending state | Dev compiles `/chat` on first navigation (≈ 11 s); the buttons looked inert |
 | 2026-10-09 | Playwright `globalSetup` warms `/`, `/chat`, `/chat/[id]`, `/settings`, `/receipts/[id]`; test budget 120 s | Route compilation landed inside the test timeout and made cold runs flaky |
