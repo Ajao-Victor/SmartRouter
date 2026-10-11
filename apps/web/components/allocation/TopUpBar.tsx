@@ -1,70 +1,58 @@
 'use client';
 
-import { motion } from 'motion/react';
-
 import { formatUsd, type MicroUsd } from '@/lib/money';
-import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';
-import { fadeUp, meetFromLeft, meetFromRight, withReduced } from '@/lib/motion/variants';
-
-import { GlitchText } from '@/components/fx/GlitchText';
-import { MagneticButton } from '@/components/ui/MagneticButton';
 
 export interface TopUpBarProps {
-  /** Top-up amount = the user's allocation setting (PDF default $2). */
-  topUpMicro: MicroUsd;
+  /** Top-up amount = the backend's suggested deposit (PDF default $2). */
+  topUpUsd: MicroUsd;
   onTopUp: () => void;
   onContinueFree: () => void;
-  /** PDF: with auto free fallback on (default) the chat carries on with the free model and says so. */
-  autoFree?: boolean;
-  /** Free quota exhausted → hide Continue free. */
+  /** PDF `details.freeFallback.available` — hide Continue free when the free quota is used up. */
   freeAvailable?: boolean;
+  freeRemaining?: number | null;
   toppingUp?: boolean;
+  /** PDF: weekly limit reached — top-ups will not help until it resets. */
+  reason?: 'allocation' | 'weekly_limit';
 }
 
 /** PDF copy: "Allocation used — Top up $2" with Top up | Continue free side by side. */
-export function TopUpBar({ topUpMicro, onTopUp, onContinueFree, autoFree = false, freeAvailable = true, toppingUp = false }: TopUpBarProps) {
-  const reduced = useReducedMotionSafe();
-  const amount = formatUsd(topUpMicro, { min: 0 });
-
-  if (autoFree && freeAvailable) {
-    return (
-      <motion.p
-        role="status"
-        variants={withReduced(fadeUp, reduced)}
-        initial="hidden"
-        animate="visible"
-        className="glass rounded-pill px-4 py-2 text-sm text-free"
-      >
-        Allocation used — continuing free
-      </motion.p>
-    );
-  }
-
+export function TopUpBar({ topUpUsd, onTopUp, onContinueFree, freeAvailable = true, freeRemaining = null, toppingUp = false, reason = 'allocation' }: TopUpBarProps) {
+  const amount = formatUsd(topUpUsd, { min: 0 });
   return (
-    <motion.section
-      role="alert"
-      aria-label="Allocation used"
-      variants={withReduced(fadeUp, reduced)}
-      initial="hidden"
-      animate="visible"
-      className="glass-strong space-y-4 rounded-lg p-4 shadow-glow-signal"
-    >
-      <h3 className="font-display text-lg text-text-0">
-        <GlitchText text={`Allocation used — Top up ${amount}`} />
-      </h3>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <motion.div variants={withReduced(meetFromLeft, reduced)}>
-          <MagneticButton className="w-full" size="lg" onClick={onTopUp} loading={toppingUp}>
-            Top up {amount}
-          </MagneticButton>
-        </motion.div>
-        <motion.div variants={withReduced(meetFromRight, reduced)}>
-          <MagneticButton className="w-full" size="lg" variant="free" onClick={onContinueFree} disabled={!freeAvailable}>
-            Continue free
-          </MagneticButton>
-        </motion.div>
+    <section role="alert" aria-label="Allocation used" className="space-y-3 rounded-xl bg-bg-1 p-4 shadow-hairline-strong">
+      <div>
+        <h3 className="text-base font-medium text-text-0">{reason === 'weekly_limit' ? 'Weekly spending limit reached' : `Allocation used — Top up ${amount}`}</h3>
+        <p className="mt-0.5 text-sm text-text-2">
+          {reason === 'weekly_limit'
+            ? 'Raise the limit in Settings or continue on the free model.'
+            : 'Your prompt is still in the box. Top up from your wallet, or continue on the free model.'}
+        </p>
       </div>
-      {!freeAvailable && <p className="text-xs text-text-2">Free messages for today are used up (30/30).</p>}
-    </motion.section>
+      <div className="flex flex-wrap gap-2">
+        {reason !== 'weekly_limit' && (
+          <button
+            type="button"
+            onClick={onTopUp}
+            disabled={toppingUp}
+            className="inline-flex h-10 items-center rounded-lg bg-accent px-4 text-sm font-medium text-text-inverse transition-colors hocus:bg-accent-hi disabled:opacity-60"
+          >
+            {toppingUp ? 'Topping up…' : `Top up ${amount}`}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onContinueFree}
+          disabled={!freeAvailable}
+          className="inline-flex h-10 items-center rounded-lg bg-free/15 px-4 text-sm font-medium text-free transition-colors hocus:bg-free/25 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Continue free
+        </button>
+      </div>
+      {!freeAvailable ? (
+        <p className="text-xs text-text-2">Free messages for today are used up. They reset at 00:00 UTC.</p>
+      ) : freeRemaining !== null ? (
+        <p className="text-xs text-text-2">{String(freeRemaining)} free messages left today.</p>
+      ) : null}
+    </section>
   );
 }
