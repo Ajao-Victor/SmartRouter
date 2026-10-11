@@ -2,6 +2,7 @@
 
 import { Suspense, use } from 'react';
 
+import { SignInGate } from '@/components/auth/SignInGate';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 
 export default function ChatPage({ params }: { params: Promise<{ chatId: string }> }) {
@@ -10,7 +11,9 @@ export default function ChatPage({ params }: { params: Promise<{ chatId: string 
   if (!safe) return <p className="text-sm text-signal">Invalid chat id.</p>;
   return (
     <Suspense fallback={null}>
-      <ChatWorkspace chatId={safe} />
+      <SignInGate what="this chat">
+        <ChatWorkspace chatId={safe} />
+      </SignInGate>
     </Suspense>
   );
 }

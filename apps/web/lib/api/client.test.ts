@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { clearSessionToken, getSessionToken, registerAuthBridge, setSessionToken } from '@/lib/auth/session';
+
 import { ApiError, apiFetch, isApiError } from './client';
 
 function mockFetch(impl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) {
@@ -10,6 +12,8 @@ function mockFetch(impl: (input: RequestInfo | URL, init?: RequestInit) => Promi
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  clearSessionToken();
+  registerAuthBridge(null);
 });
 
 describe('apiFetch (PDF "Data fetching")', () => {
@@ -21,10 +25,38 @@ describe('apiFetch (PDF "Data fetching")', () => {
     expect(url).toBe('http://localhost:8787/me/settings');
     expect(init.credentials).toBe('include');
     expect(init.method).toBe('PATCH');
-    const headers = init.headers as Record<string, string>;
-    expect(headers['Content-Type']).toBe('application/json');
-    expect(headers.Accept).toBe('application/json');
+    const headers = new Headers(init.headers);
+    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(headers.get('Accept')).toBe('application/json');
+    expect(headers.has('X-Session-Token')).toBe(false);
     expect(init.body).toBe(JSON.stringify({ slider: 'cheapest' }));
+  });
+
+  it('sends X-Session-Token on every call once signed in (Brave/Safari block the cookie)', async () => {
+    setSessionToken('user_1.123.sig', null);
+    const spy = mockFetch(() => Promise.resolve(new Response(JSON.stringify({ ok: true }), { status: 200 })));
+    await apiFetch('/me');
+    const [, init] = spy.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(init.headers).get('X-Session-Token')).toBe('user_1.123.sig');
+    expect(init.credentials).toBe('include');
+  });
+
+  it('any 401 drops the token and opens the sign-in modal', async () => {
+    setSessionToken('expired', null);
+    const openSignIn = vi.fn();
+    registerAuthBridge({ openSignIn, logoutPrivy: () => Promise.resolve() });
+    mockFetch(() => Promise.resolve(new Response(JSON.stringify({ code: 'UNAUTHENTICATED', message: 'Session expired' }), { status: 401 })));
+    await expect(apiFetch('/chats')).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
+    expect(getSessionToken()).toBeNull();
+    expect(openSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('a 401 from /auth/privy is left to the sign-in flow (no modal loop)', async () => {
+    const openSignIn = vi.fn();
+    registerAuthBridge({ openSignIn, logoutPrivy: () => Promise.resolve() });
+    mockFetch(() => Promise.resolve(new Response(JSON.stringify({ code: 'UNAUTHENTICATED', message: 'Privy token rejected' }), { status: 401 })));
+    await expect(apiFetch('/auth/privy', { method: 'POST', body: { identityToken: 'x' } })).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
+    expect(openSignIn).not.toHaveBeenCalled();
   });
 
   it('validates the response with a schema', async () => {

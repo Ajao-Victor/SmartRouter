@@ -1,3 +1,4 @@
+import { SignInGate } from '@/components/auth/SignInGate';
 import { ReceiptView } from '@/components/receipt/ReceiptView';
 
 /** Deep link to a receipt (also opens as a drawer from any reply). */
@@ -7,7 +8,13 @@ export default async function ReceiptPage({ params }: { params: Promise<{ reques
   return (
     <section className="space-y-4">
       <p className="num text-2xs tracking-label text-text-2 uppercase">receipt</p>
-      {safe ? <ReceiptView requestId={safe} /> : <p className="text-sm text-signal">Invalid receipt id.</p>}
+      {safe ? (
+        <SignInGate what="this receipt">
+          <ReceiptView requestId={safe} />
+        </SignInGate>
+      ) : (
+        <p className="text-sm text-signal">Invalid receipt id.</p>
+      )}
     </section>
   );
 }

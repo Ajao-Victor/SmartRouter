@@ -33,15 +33,25 @@ async function readSse(res: Response): Promise<{ event: string; data: unknown }[
 interface Opt { modelId: string; quoteId: string | null; priceUsd: number; free: boolean; bestQuality: boolean; reason: string; expiresAt: string | null }
 
 describe('mock API (live contract)', () => {
-  it('signs in via challenge + verify and serves /me', async () => {
+  it('signs in with POST /auth/privy and serves /me (settings nested, usage included)', async () => {
     resetMockState({ authed: false });
     expect((await json('GET', '/me')).status).toBe(401);
-    const ch = (await (await json('POST', '/auth/challenge', { address: state.user.address, origin: 'http://localhost:3300' })).json()) as { message: string };
-    expect(ch.message).toMatch(/Chain ID: 42431/);
-    expect((await json('POST', '/auth/verify', { message: ch.message, signature: '0xsig' })).ok).toBe(true);
-    const me = (await (await json('GET', '/me')).json()) as { address: string; allocationUsd: number };
+    expect((await json('POST', '/auth/privy', { identityToken: 'forged' })).status).toBe(401);
+    const signIn = (await (await json('POST', '/auth/privy', { identityToken: 'privy-id-token' })).json()) as { address: string; token: string; email: string; loginMethod: string; expiresAt: string };
+    expect(signIn.token).toBeTruthy();
+    expect(signIn.address).toBe(state.user.address);
+    expect(signIn.loginMethod).toBe('email');
+    const me = (await (await json('GET', '/me')).json()) as { address: string; email: string; settings: { allocationUsd: number }; usage: { alert: unknown } };
     expect(me.address).toBe(state.user.address);
-    expect(me.allocationUsd).toBe(2);
+    expect(me.email).toBe('demo@smartrouter.dev');
+    expect(me.settings.allocationUsd).toBe(2);
+    expect(me.usage.alert).toBeNull();
+  });
+
+  it('POST /recommend works signed out: guest: true and no quotes', async () => {
+    const res = (await (await json('POST', '/recommend', { prompt: 'Write a haiku' })).json()) as { guest: boolean; options: Opt[] };
+    expect(res.guest).toBe(true);
+    expect(res.options.every((o) => o.quoteId === null)).toBe(true);
   });
 
   it('POST /chats with a description returns quoted options: top 2 + best quality + free', async () => {

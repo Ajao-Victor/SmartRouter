@@ -11,15 +11,14 @@ import { runStream, type RunOutcome, type SseError } from '@/lib/api/sse';
 import { FREE_MODEL_ID, freeFallbackSchema, type FreeFallback, type Quote } from '@/lib/api/types';
 import { micro, type MicroUsd } from '@/lib/money';
 import { toPaymentError } from '@/lib/tempo/paymentErrors';
-import { getCurrentWallet } from '@/lib/tempo/wallet';
 
 import { optimisticMessage, useChatCache } from '@/hooks/useChat';
 import { isQuoteExpired } from '@/hooks/useQuote';
-import { selectCanAfford, useAllocationStore } from '@/stores/allocationStore';
+import { selectCanAfford, selectNextDeposit, useAllocationStore } from '@/stores/allocationStore';
 import { useComposerStore } from '@/stores/composerStore';
 import { useStreamStore } from '@/stores/streamStore';
 import { toast } from '@/stores/toastStore';
-import { useWalletStore } from '@/stores/walletStore';
+import { selectPaidBlocked, useUsageStore } from '@/stores/usageStore';
 
 export interface RunRequest {
   prompt: string;
@@ -29,13 +28,29 @@ export interface RunRequest {
   autoFreeFallback: boolean;
 }
 
-export type RunStart = 'started' | 'needs_top_up' | 'needs_requote' | 'free_exhausted' | 'cancelled' | 'busy' | 'ignored';
+/**
+ * - `needs_top_up`: the deposit (or weekly limit) can't cover it — the message is kept.
+ * - `needs_requote`: QUOTE_EXPIRED / VALIDATION_FAILED → re-quote silently and run.
+ * - `needs_sign_in`: 401 → the sign-in modal is open; send again after sign-in.
+ * - `needs_reauth`: FORBIDDEN → sign out and back in.
+ * - `rate_limited`: wait `Retry-After` seconds, then retry.
+ */
+export type RunStart = 'started' | 'needs_top_up' | 'needs_requote' | 'needs_sign_in' | 'needs_reauth' | 'rate_limited' | 'free_exhausted' | 'cancelled' | 'busy' | 'ignored';
 
 export interface NeedsTopUp {
   priceUsd: MicroUsd;
   prompt: string;
   freeFallback: FreeFallback;
+  /** `deposit`: open the deposit dialog (close-and-reopen). `weekly_limit`: raise the limit or go free. */
+  reason: 'deposit' | 'weekly_limit';
 }
+
+/** 402 ALLOCATION_EXHAUSTED with `details.reason: 'weekly_limit'` is the weekly limit; anything else is the deposit. */
+function topUpReason(details: unknown): NeedsTopUp['reason'] {
+  return details && typeof details === 'object' && (details as { reason?: unknown }).reason === 'weekly_limit' ? 'weekly_limit' : 'deposit';
+}
+
+const FREE_FALLBACK_DEFAULT: FreeFallback = { available: true, remaining: null, modelId: FREE_MODEL_ID };
 
 export interface ComparePair {
   compareGroup: string;
@@ -46,6 +61,9 @@ export interface ComparePair {
   rightModelId: string;
   prompt: string;
 }
+
+/** Codes that mean the run never started (nothing streamed, nothing charged). */
+const PRE_STREAM_CODES: ReadonlySet<string> = new Set(['ALLOCATION_EXHAUSTED', 'PAYMENT_REQUIRED', 'QUOTE_EXPIRED', 'QUOTE_USED', 'VALIDATION_FAILED', 'RATE_LIMITED', 'SESSION_BUSY', 'FREE_LIMIT_REACHED', 'PAYMENT_CANCELLED', 'UNAUTHENTICATED', 'FORBIDDEN', 'PROVIDER_UNAVAILABLE', 'NOT_FOUND']);
 
 function compareGroupId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `cg_${String(Date.now())}_${Math.random().toString(36).slice(2)}`;
@@ -63,6 +81,8 @@ export function useRun(chatId: string) {
   const [needsTopUp, setNeedsTopUp] = useState<NeedsTopUp | null>(null);
   const [running, setRunning] = useState(false);
   const [cooldownKey, setCooldownKey] = useState(0);
+  /** Seconds from the last RATE_LIMITED `Retry-After`. */
+  const retryAfterRef = useRef(0);
   const [compare, setCompare] = useState<ComparePair | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -76,14 +96,17 @@ export function useRun(chatId: string) {
     void qc.invalidateQueries({ queryKey: queryKeys.requests() });
   }, [qc]);
 
-  /** Authorize the access key and configure the manager once (one passkey prompt, first paid run). */
+  /**
+   * Handover "Paid messages", steps 2–3: a viem wallet client over the Privy embedded wallet on
+   * `network.chainId`, and one `sessionManager` per signed-in user with `maxDeposit` = the chosen
+   * deposit (default `suggestedDepositUsd`). No prompt here — the deposit opens on the first paid run.
+   */
   const preparePayments = useCallback(async (): Promise<void> => {
-    const wallet = getCurrentWallet();
-    if (!wallet) throw new ApiError({ status: 0, code: 'UNAUTHENTICATED', message: 'Sign in with your wallet to run paid models.' });
-    if (useWalletStore.getState().paymentsReady) return;
+    const alloc = useAllocationStore.getState();
+    if (!alloc.paidRunsEnabled) throw new ApiError({ status: 503, code: 'PROVIDER_UNAVAILABLE', message: 'Paid models are not available right now. Use the free model.' });
     try {
-      await wallet.preparePayments(useAllocationStore.getState().suggestedDepositUsd);
-      useWalletStore.getState().setPaymentsReady(true);
+      const { ensureSession } = await import('@/lib/tempo/session');
+      await ensureSession({ maxDepositUsd: selectNextDeposit(alloc), chainId: alloc.chainId });
     } catch (err) {
       throw toPaymentError(err) ?? err;
     }
@@ -102,6 +125,7 @@ export function useRun(chatId: string) {
           onMeta: (m) => {
             useStreamStore.getState().setMeta(messageId, { requestId: m.requestId, modelId: m.modelId, label: m.label, priceUsd: m.priceUsd, free: m.free, userMessageId: m.userMessageId ?? null, assistantMessageId: m.assistantMessageId ?? null });
             if (m.remainingUsd !== null && m.remainingUsd !== undefined) useAllocationStore.getState().setRemaining(m.remainingUsd);
+            if (m.usage) useUsageStore.getState().setUsage(m.usage);
             cache.update(messageId, { requestId: m.requestId, modelId: m.modelId });
             if (m.userMessageId) cache.update(userMessageId, { id: m.userMessageId });
           },
@@ -128,6 +152,8 @@ export function useRun(chatId: string) {
         const d = outcome.data;
         useStreamStore.getState().done(messageId, { chargedUsd: d.chargedUsd, latencyMs: d.latencyMs ?? null, requestId: d.requestId, files: d.files, citations: d.citations, text: d.text });
         if (!quote.free) useAllocationStore.getState().applyCharge(d.chargedUsd);
+        // Refresh the banner from every `done` event (no polling).
+        if (d.usage) useUsageStore.getState().setUsage(d.usage);
         const entry = useStreamStore.getState().byMessageId[messageId];
         cache.update(messageId, { text: d.text ?? entry?.text ?? '', status: 'done', requestId: d.requestId, modelId: d.modelId || entry?.modelId || quote.modelId, chargedUsd: d.chargedUsd, files: d.files, citations: d.citations });
         refresh();
@@ -162,18 +188,20 @@ export function useRun(chatId: string) {
         case 'ALLOCATION_EXHAUSTED':
         case 'PAYMENT_REQUIRED': {
           const parsed = freeFallbackSchema.safeParse((e.details as { freeFallback?: unknown } | undefined)?.freeFallback ?? {});
-          setNeedsTopUp({ priceUsd, prompt, freeFallback: parsed.success ? parsed.data : { available: true, remaining: null, modelId: FREE_MODEL_ID } });
+          setNeedsTopUp({ priceUsd, prompt, freeFallback: parsed.success ? parsed.data : FREE_FALLBACK_DEFAULT, reason: topUpReason(e.details) });
           return 'needs_top_up';
         }
         case 'QUOTE_EXPIRED':
         case 'VALIDATION_FAILED':
           return 'needs_requote';
         case 'QUOTE_USED':
+          // Already ran (double click / retry): not charged twice; the next Send gets a new quote.
           return 'ignored';
         case 'RATE_LIMITED':
+          retryAfterRef.current = Math.max(1, Math.round(e.retryAfter ?? 10));
           setCooldownKey((k) => k + 1);
-          toast.warn(`Too many requests — try again in ${String(Math.max(1, Math.round(e.retryAfter ?? 10)))} s`);
-          return 'busy';
+          toast.warn(`Busy — sending again in ${String(retryAfterRef.current)} s`);
+          return 'rate_limited';
         case 'SESSION_BUSY':
           toast.warn('A payment is already in progress', 'Wait for the current answer to start streaming.');
           return 'busy';
@@ -184,20 +212,23 @@ export function useRun(chatId: string) {
           toast.info('Payment cancelled', 'Nothing was charged. Your prompt is still in the box.');
           return 'cancelled';
         case 'UNAUTHENTICATED':
-          toast.warn('Sign in to continue');
-          return 'cancelled';
+          return 'needs_sign_in';
         case 'FORBIDDEN':
-          toast.error('This payment session belongs to another wallet', 'Sign out and back in with the paying wallet.');
-          return 'cancelled';
+          toast.error(e.message || 'This payment belongs to another account', 'Sign out and back in.');
+          return 'needs_reauth';
         case 'PROVIDER_UNAVAILABLE':
-          toast.warn('No model is available for this task right now', 'Try another model or the free one.');
+          toast.warn(e.message || 'This model is unavailable right now', 'Pick another model.');
+          return 'cancelled';
+        case 'NOT_FOUND':
+          void qc.invalidateQueries({ queryKey: queryKeys.chats() });
+          toast.warn('That chat or quote is gone', 'The list has been refreshed.');
           return 'cancelled';
         default:
           toast.error(e.message);
           return 'cancelled';
       }
     },
-    [],
+    [qc],
   );
 
   const run = useCallback(
@@ -208,12 +239,16 @@ export function useRun(chatId: string) {
 
       if (!quote.free) {
         const alloc = useAllocationStore.getState();
-        if (alloc.status === 'closed' || !selectCanAfford(price)(alloc)) {
+        const usage = useUsageStore.getState();
+        // `exhausted` (100%) blocks paid Send and offers the free model.
+        const blocked = selectPaidBlocked(usage);
+        if (blocked || !selectCanAfford(price)(alloc)) {
           if (req.autoFreeFallback) {
             toast.info('Allocation used — continuing free');
             return runFree(prompt);
           }
-          setNeedsTopUp({ priceUsd: price, prompt, freeFallback: { available: true, remaining: null, modelId: FREE_MODEL_ID } });
+          const reason = blocked && usage.usage?.alert?.meter === 'weekly' ? 'weekly_limit' : 'deposit';
+          setNeedsTopUp({ priceUsd: price, prompt, freeFallback: FREE_FALLBACK_DEFAULT, reason });
           return 'needs_top_up';
         }
       }
@@ -236,9 +271,9 @@ export function useRun(chatId: string) {
 
       const outcome = await executeStream({ messageId: asstMsg.id, userMessageId: userMsg.id, quote, prompt });
       setRunning(false);
-      if (outcome.kind === 'error' && ['ALLOCATION_EXHAUSTED', 'PAYMENT_REQUIRED', 'QUOTE_EXPIRED', 'QUOTE_USED', 'VALIDATION_FAILED', 'RATE_LIMITED', 'SESSION_BUSY', 'FREE_LIMIT_REACHED', 'PAYMENT_CANCELLED', 'UNAUTHENTICATED', 'FORBIDDEN', 'PROVIDER_UNAVAILABLE'].includes(outcome.data.code)) {
-        // Pre-stream failure surfaced through the stream path: undo the optimistic turn and apply the PDF rule.
-        const err = new ApiError({ status: 0, code: outcome.data.code as ApiError['code'], message: outcome.data.message });
+      if (outcome.kind === 'error' && PRE_STREAM_CODES.has(outcome.data.code) && !useStreamStore.getState().byMessageId[asstMsg.id]?.requestId) {
+        // Pre-stream failure surfaced through the stream path: undo the optimistic turn and apply the rule.
+        const err = new ApiError({ status: 0, code: outcome.data.code as ApiError['code'], message: outcome.data.message, details: outcome.data.details, ...(outcome.data.retryAfter !== undefined ? { retryAfter: outcome.data.retryAfter } : {}) });
         return handlePreflightError(err, prompt, price, () => {
           cache.remove(userMsg.id);
           cache.remove(asstMsg.id);
@@ -274,8 +309,8 @@ export function useRun(chatId: string) {
       const total = micro((left.free ? 0 : left.priceUsd) + (right.free ? 0 : right.priceUsd));
       if (total > 0) {
         const alloc = useAllocationStore.getState();
-        if (alloc.status === 'closed' || !selectCanAfford(total)(alloc)) {
-          setNeedsTopUp({ priceUsd: total, prompt, freeFallback: { available: true, remaining: null, modelId: FREE_MODEL_ID } });
+        if (selectPaidBlocked(useUsageStore.getState()) || !selectCanAfford(total)(alloc)) {
+          setNeedsTopUp({ priceUsd: total, prompt, freeFallback: FREE_FALLBACK_DEFAULT, reason: 'deposit' });
           return 'needs_top_up';
         }
       }
@@ -323,6 +358,8 @@ export function useRun(chatId: string) {
       setCompare(null);
     },
     cooldownKey,
+    /** Seconds to wait after a `rate_limited` result (from `Retry-After`). */
+    retryAfterSeconds: () => retryAfterRef.current,
     bumpCooldown: () => {
       setCooldownKey((k) => k + 1);
     },

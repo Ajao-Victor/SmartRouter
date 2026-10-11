@@ -5,7 +5,7 @@ import { selectCanAfford, selectIsLow, selectIsUsed, selectRemainingPct, useAllo
 
 const current = (over: Partial<NonNullable<SessionsCurrent['session']>> | null = {}): SessionsCurrent => ({
   suggestedDepositUsd: micro(2_000_000),
-  network: 'moderato',
+  paidRunsEnabled: true, usage: null, network: { name: null, chainId: 42431, token: null, recipient: null, operator: null },
   session:
     over === null
       ? null

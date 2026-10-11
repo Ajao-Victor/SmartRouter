@@ -44,7 +44,7 @@ function Stepper({ label, hint, value, step, min, max, onChange, disabled, unit 
           <Minus size={16} />
         </button>
         <span className="num w-20 text-center text-base text-text-0" aria-live="polite">
-          {formatUsd(value, { min: 0, max: 0 })}
+          {formatUsd(value, { min: 0, max: 2 })}
           {unit ?? ''}
         </span>
         <button type="button" className={btn} aria-label={`Increase ${label}`} disabled={disabled || value >= max} onClick={() => { set(value + step); }}>
@@ -55,17 +55,20 @@ function Stepper({ label, hint, value, step, min, max, onChange, disabled, unit 
   );
 }
 
-/** PDF settings: allocation size (default $2), weekly spending limit (e.g. $10/week), auto free fallback (default on). */
+/**
+ * Settings (`PATCH /me/settings`): allocation size = preferred deposit (0.5–100, default $2),
+ * weekly spending limit (0–1000, e.g. $10/week), auto free fallback (default on).
+ */
 export function AllocationControls({ allocationUsd, weeklyLimitUsd, autoFreeFallback, onChange, disabled = false }: AllocationControlsProps) {
   return (
     <div className="space-y-2">
       <Stepper
         label="Allocation size"
-        hint="Deposited on the first paid run and on each top-up"
+        hint="Preferred deposit, used the next time a deposit opens"
         value={allocationUsd}
         step={ALLOC_STEP}
-        min={fromUsd(1)}
-        max={fromUsd(50)}
+        min={fromUsd(0.5)}
+        max={fromUsd(100)}
         disabled={disabled}
         onChange={(v) => { onChange({ allocationUsd: toUsd(v) }); }}
       />
@@ -74,8 +77,8 @@ export function AllocationControls({ allocationUsd, weeklyLimitUsd, autoFreeFall
         hint="Per week, across all sessions"
         value={weeklyLimitUsd}
         step={LIMIT_STEP}
-        min={fromUsd(5)}
-        max={fromUsd(500)}
+        min={fromUsd(0)}
+        max={fromUsd(1000)}
         disabled={disabled}
         unit="/wk"
         onChange={(v) => { onChange({ weeklyLimitUsd: toUsd(v) }); }}

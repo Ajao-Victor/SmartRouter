@@ -1,6 +1,7 @@
 import type { ZodType, ZodTypeDef } from 'zod';
 
 import { API_ERROR_CODES, type ServerErrorCode } from '@/lib/api/types';
+import { clearSessionToken, getSessionToken, openSignIn } from '@/lib/auth/session';
 import { env } from '@/lib/env';
 
 /**
@@ -115,15 +116,35 @@ export function apiUrl(path: string): string {
 }
 
 /**
- * The one API client (PDF "Data fetching"): plain `fetch` with `credentials: 'include'` so the
- * `sr_session` cookie rides along, JSON in/out, errors mapped by `code`. The API is called
- * directly — never through a Vercel rewrite — so the backend sees the real client IP.
+ * The raw API helper from the handover ("Sign-in flow"): adds `X-Session-Token` when signed in,
+ * JSON content type for bodies, `credentials: 'include'` (the cookie still works where the
+ * browser allows it), and on any 401 drops the token and opens the sign-in modal. `/auth/*`
+ * calls are excluded from the modal: the sign-in flow handles its own failures.
+ *
+ * The mppx session manager uses this too (`fetch: (url, init) => apiRequest(...)`), so paid
+ * runs carry the session header.
+ */
+export async function apiRequest(path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  const token = getSessionToken();
+  if (token) headers.set('X-Session-Token', token);
+  if (init.body && !headers.has('content-type')) headers.set('content-type', 'application/json');
+  const res = await fetch(apiUrl(path), { ...init, headers, credentials: 'include' });
+  if (res.status === 401 && !path.startsWith('/auth/')) {
+    clearSessionToken();
+    openSignIn();
+  }
+  return res;
+}
+
+/**
+ * Typed JSON client on top of `apiRequest`: JSON in/out, errors mapped by `code`. The API is
+ * called directly — never through a Vercel rewrite — so the backend sees the real client IP.
  */
 export async function apiFetch<T = unknown>(path: string, options: ApiRequestOptions<T> = {}): Promise<T> {
   const method = options.method ?? 'GET';
   const init: RequestInit = {
     method,
-    credentials: 'include',
     headers: {
       Accept: 'application/json',
       ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
@@ -135,7 +156,7 @@ export async function apiFetch<T = unknown>(path: string, options: ApiRequestOpt
 
   let response: Response;
   try {
-    response = await fetch(apiUrl(path), init);
+    response = await apiRequest(path, init);
   } catch (err) {
     throw errorFromFetchFailure(err);
   }

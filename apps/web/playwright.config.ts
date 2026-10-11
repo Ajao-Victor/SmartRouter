@@ -36,6 +36,7 @@ export default defineConfig({
       NEXT_PUBLIC_TEMPO_NETWORK: 'moderato',
       NEXT_PUBLIC_CHAIN_ID: '42431',
       NEXT_PUBLIC_RPC_URL: 'https://rpc.moderato.tempo.xyz',
+      NEXT_PUBLIC_PRIVY_APP_ID: 'test-privy-app',
       NEXT_DIST_DIR: '.next-e2e',
     },
   },

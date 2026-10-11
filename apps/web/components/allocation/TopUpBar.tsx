@@ -7,6 +7,8 @@ export interface TopUpBarProps {
   topUpUsd: MicroUsd;
   onTopUp: () => void;
   onContinueFree: () => void;
+  /** Weekly limit: open settings to raise `weeklyLimitUsd`. */
+  onRaiseLimit?: () => void;
   /** PDF `details.freeFallback.available` — hide Continue free when the free quota is used up. */
   freeAvailable?: boolean;
   freeRemaining?: number | null;
@@ -16,7 +18,7 @@ export interface TopUpBarProps {
 }
 
 /** PDF copy: "Allocation used — Top up $2" with Top up | Continue free side by side. */
-export function TopUpBar({ topUpUsd, onTopUp, onContinueFree, freeAvailable = true, freeRemaining = null, toppingUp = false, reason = 'allocation' }: TopUpBarProps) {
+export function TopUpBar({ topUpUsd, onTopUp, onContinueFree, onRaiseLimit, freeAvailable = true, freeRemaining = null, toppingUp = false, reason = 'allocation' }: TopUpBarProps) {
   const amount = formatUsd(topUpUsd, { min: 0 });
   return (
     <section role="alert" aria-label="Allocation used" className="space-y-3 rounded-xl bg-bg-1 p-4 shadow-hairline-strong">
@@ -25,10 +27,19 @@ export function TopUpBar({ topUpUsd, onTopUp, onContinueFree, freeAvailable = tr
         <p className="mt-0.5 text-sm text-text-2">
           {reason === 'weekly_limit'
             ? 'Raise the limit in Settings or continue on the free model.'
-            : 'Your prompt is still in the box. Top up from your wallet, or continue on the free model.'}
+            : 'Your message is kept. Open a new deposit (one approval) and it sends right after, or continue on the free model.'}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
+        {reason === 'weekly_limit' && onRaiseLimit && (
+          <button
+            type="button"
+            onClick={onRaiseLimit}
+            className="inline-flex h-10 items-center rounded-lg bg-accent px-4 text-sm font-medium text-text-inverse transition-colors hocus:bg-accent-hi"
+          >
+            Raise limit
+          </button>
+        )}
         {reason !== 'weekly_limit' && (
           <button
             type="button"

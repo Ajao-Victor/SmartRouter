@@ -7,7 +7,7 @@ import { env, isTestnet } from '@/lib/env';
 import { addressUrl, shortHex } from '@/lib/explorer';
 import { formatUsd } from '@/lib/money';
 
-import { useAllocationStore } from '@/stores/allocationStore';
+import { selectNextDeposit, useAllocationStore } from '@/stores/allocationStore';
 import { toast } from '@/stores/toastStore';
 import { useUiStore } from '@/stores/uiStore';
 
@@ -20,7 +20,7 @@ export interface WalletSheetProps {
   onCloseSession: () => void;
   onSignOut: () => void;
   onSettings: (patch: SettingsPatch) => void;
-  busy?: { topUp?: boolean; close?: boolean; settings?: boolean; signOut?: boolean };
+  busy?: { close?: boolean; settings?: boolean; signOut?: boolean };
 }
 
 function Row({ label, value, tone }: { label: string; value: string; tone?: string }) {
@@ -33,9 +33,10 @@ function Row({ label, value, tone }: { label: string; value: string; tone?: stri
 }
 
 /**
- * Wallet sheet (PDF "Paying for runs"): the payment session from `/sessions/current` — deposit,
- * spent, remaining, requests — with Top up and Close (unspent deposit returns now; the backend
- * also closes idle sessions after 24 h), the allocation settings, and the signed-in address.
+ * Wallet sheet (Handover "Paying for runs"): the open deposit from `/sessions/current` — deposit,
+ * spent, remaining, requests — with New deposit (close-and-reopen; no top-up in v1) and Close
+ * (the rest returns now; the backend also settles after 10 idle minutes and closes after 24 h),
+ * the allocation settings, and the signed-in account (email + Privy Tempo wallet).
  */
 export function WalletSheet({ user, onTopUp, onCloseSession, onSignOut, onSettings, busy = {} }: WalletSheetProps) {
   const open = useUiStore((s) => s.walletSheetOpen);
@@ -44,7 +45,7 @@ export function WalletSheet({ user, onTopUp, onCloseSession, onSignOut, onSettin
   const alloc = useAllocationStore();
   const hasSession = alloc.status !== 'none' && alloc.status !== 'closed';
   const explorer = addressUrl(user.address);
-  const amount = formatUsd(alloc.suggestedDepositUsd, { min: 0 });
+  const amount = formatUsd(selectNextDeposit(alloc), { min: 0 });
 
   const copy = async () => {
     try {
@@ -65,6 +66,12 @@ export function WalletSheet({ user, onTopUp, onCloseSession, onSignOut, onSettin
     >
       <div className="space-y-6 pb-4">
         <section className="space-y-1" aria-label="Account">
+          {user.email && (
+            <p className="text-sm text-text-0">
+              {user.email}
+              {user.loginMethod && <span className="text-text-2"> · {user.loginMethod === 'google' ? 'Google' : user.loginMethod === 'email' ? 'Email' : user.loginMethod}</span>}
+            </p>
+          )}
           <p className="num flex items-center gap-2 text-sm text-text-0">
             {shortHex(user.address, 8, 6)}
             <button type="button" aria-label="Copy address" onClick={() => void copy()} className="rounded-md p-1 text-text-2 transition-colors hocus:bg-bg-2 hocus:text-text-0">
@@ -99,10 +106,10 @@ export function WalletSheet({ user, onTopUp, onCloseSession, onSignOut, onSettin
             <button
               type="button"
               onClick={onTopUp}
-              disabled={busy.topUp || alloc.status === 'toppingUp' || alloc.status === 'closing'}
+              disabled={alloc.status === 'toppingUp' || alloc.status === 'closing'}
               className="inline-flex h-10 items-center rounded-lg bg-accent px-4 text-sm font-medium text-text-inverse transition-colors hocus:bg-accent-hi disabled:opacity-60"
             >
-              {busy.topUp ? 'Topping up…' : hasSession ? `Top up ${amount}` : `Deposit ${amount}`}
+              {alloc.status === 'toppingUp' ? 'Setting up…' : hasSession ? 'New deposit' : `Deposit ${amount}`}
             </button>
             {hasSession && (
               <button
@@ -115,7 +122,7 @@ export function WalletSheet({ user, onTopUp, onCloseSession, onSignOut, onSettin
               </button>
             )}
           </div>
-          <p className="mt-2 text-xs text-text-2">No automatic top-ups. Closing returns the unspent deposit to your wallet; idle sessions close by themselves after 24 h.</p>
+          <p className="mt-2 text-xs text-text-2">No automatic top-ups. A new deposit closes this one first. Closing returns the unspent deposit to your wallet; idle deposits settle after 10 minutes and close after 24 h.</p>
         </section>
 
         <section className="space-y-2" aria-label="Allocation settings">
@@ -146,7 +153,7 @@ export function WalletSheet({ user, onTopUp, onCloseSession, onSignOut, onSettin
           <button type="button" onClick={onSignOut} disabled={busy.signOut} className="rounded-lg border border-signal/40 px-3 py-1.5 text-sm text-signal transition-colors hocus:bg-signal/10 disabled:opacity-60">
             {busy.signOut ? 'Signing out…' : 'Sign out'}
           </button>
-          <p className="text-xs text-text-2">Signing out clears this device&apos;s session cookie and passkey reference. Your deposit stays in the session until it closes.</p>
+          <p className="text-xs text-text-2">Signing out leaves the deposit open; the backend settles it after 10 idle minutes and closes it after 24 hours, so no money is stuck. Sign in with the same email on any device to get your chats back.</p>
         </section>
       </div>
     </Sheet>

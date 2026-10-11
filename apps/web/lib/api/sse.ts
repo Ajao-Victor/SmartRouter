@@ -5,13 +5,13 @@
  * heartbeats (every 15 s) and are ignored for content but reset the watchdog.
  *
  * Paid quotes go through `paidFetch` (the mppx session manager: 402 handshake, vouchers,
- * one deposit approval); free quotes use plain `fetch`.
+ * one deposit approval); free quotes use the plain `apiRequest` helper (X-Session-Token).
  */
 import { z } from 'zod';
 
-import { ApiError, apiUrl, errorFromFetchFailure, errorFromResponse, isApiError } from '@/lib/api/client';
+import { ApiError, apiRequest, errorFromFetchFailure, errorFromResponse, isApiError } from '@/lib/api/client';
 import { RUN_PATH } from '@/lib/api/endpoints';
-import { fileSchema, usdSchema, type RunInput } from '@/lib/api/types';
+import { fileSchema, usageSchema, usdSchema, type RunInput } from '@/lib/api/types';
 import { micro } from '@/lib/money';
 import { toPaymentError } from '@/lib/tempo/paymentErrors';
 
@@ -29,6 +29,8 @@ const meta = z.object({
   userMessageId: z.string().nullish(),
   assistantMessageId: z.string().nullish(),
   remainingUsd: usdSchema.nullish(),
+  /** Paid runs: the usage object for the banners (Handover "Usage banners"). */
+  usage: usageSchema.nullish(),
 });
 const delta = z.object({ text: z.string() });
 const fallback = z.object({ fromModelId: z.string(), toModelId: z.string(), label: z.string().default(''), reason: z.string().default('') });
@@ -38,8 +40,10 @@ const done = z.object({
   text: z.string().nullish(),
   files: z.array(fileSchema).default([]),
   citations: z.array(z.unknown()).default([]),
+  /** The real charge for this request (the `Payment-Receipt` header counts only earlier requests). */
   chargedUsd: usdSchema.default(0),
   latencyMs: z.number().nullish(),
+  usage: usageSchema.nullish(),
 });
 const pending = z.object({ requestId: z.string(), pollUrl: z.string() });
 const error = z.object({
@@ -48,6 +52,9 @@ const error = z.object({
   refunded: z.boolean().default(false),
   refundedUsd: usdSchema.nullish(),
   freeRerun: z.object({ available: z.boolean().default(false), modelId: z.string().nullish() }).nullish(),
+  /** Pre-stream failures only: the error body's `details` (e.g. `reason`, `freeFallback`) and `Retry-After`. */
+  details: z.unknown().optional(),
+  retryAfter: z.number().optional(),
 });
 
 export type SseMeta = z.output<typeof meta>;
@@ -163,16 +170,16 @@ function dispatch(frame: Frame, h: RunHandlers): RunOutcome | null {
 async function openRun(body: RunInput, free: boolean, signal: AbortSignal): Promise<Response> {
   const init: RequestInit = {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
     body: JSON.stringify(body),
     signal,
   };
   try {
-    if (free) return await fetch(apiUrl(RUN_PATH), init);
+    // Handover: free messages go through the normal api() helper; no wallet is involved.
+    if (free) return await apiRequest(RUN_PATH, init);
     // mppx (and viem) load on the first paid run only.
     const { paidFetch } = await import('@/lib/tempo/session');
-    return await paidFetch(apiUrl(RUN_PATH), init);
+    return await paidFetch(RUN_PATH, init);
   } catch (err) {
     if (isApiError(err)) throw err;
     throw toPaymentError(err) ?? errorFromFetchFailure(err);
@@ -250,6 +257,7 @@ export async function runStream(body: RunInput, options: { free: boolean }, hand
       refunded: true,
       refundedUsd: null,
       freeRerun: { available: !(err instanceof ApiError && err.code === 'FREE_LIMIT_REACHED'), modelId: null },
+      ...(err instanceof ApiError ? { details: err.details, ...(err.retryAfter !== undefined ? { retryAfter: err.retryAfter } : {}) } : {}),
     };
     handlers.onError?.(e);
     return { kind: 'error', data: e };

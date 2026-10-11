@@ -1,9 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
-
-import { useRouter } from 'next/navigation';
-
 import { apiUnreachableHint } from '@/lib/api/errors';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -11,8 +7,6 @@ import { useCloseSession } from '@/hooks/useCloseSession';
 import { useMe } from '@/hooks/useMe';
 import { useSession } from '@/hooks/useSession';
 import { useSettings } from '@/hooks/useSettings';
-import { useTopUp } from '@/hooks/useTopUp';
-import { useAllocationStore } from '@/stores/allocationStore';
 import { toast } from '@/stores/toastStore';
 import { useUiStore } from '@/stores/uiStore';
 
@@ -20,6 +14,7 @@ import { AllocationHUD } from '@/components/allocation/AllocationHUD';
 import { TopBar } from '@/components/layout/TopBar';
 import { ReceiptDrawer } from '@/components/receipt/ReceiptDrawer';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { DepositDialog } from '@/components/wallet/DepositDialog';
 import { WalletSheet } from '@/components/wallet/WalletSheet';
 
 export interface AppShellProps {
@@ -28,39 +23,43 @@ export interface AppShellProps {
 }
 
 /**
- * Signed-in shell: `GET /me` on load (401 → landing), the wallet restored silently from the
- * stored passkey, `/sessions/current` mirrored into the allocation store, wallet sheet and
- * receipt drawer mounted once.
+ * App shell. Signed-out visitors get the normal chat screens (Handover "Guest mode"); the sign-in
+ * modal appears only when they send. Signed in: `GET /me` on load (seeds the usage banner),
+ * `GET /sessions/current` (payment setup + deposit), wallet sheet, deposit dialog, receipts.
  */
 export function AppShell({ children, title }: AppShellProps) {
-  const router = useRouter();
   const me = useMe();
   const settings = useSettings();
   const auth = useAuth();
-  const topUp = useTopUp();
   const closeSession = useCloseSession();
   const pageTitle = useUiStore((s) => s.pageTitle);
-  const suggestedDeposit = useAllocationStore((s) => s.suggestedDepositUsd);
-  useSession(Boolean(me.data));
+  const openDeposit = useUiStore((s) => s.openDeposit);
+  useSession(auth.isSignedIn && Boolean(me.data));
 
-  const restore = auth.restore;
-  useEffect(() => {
-    void restore();
-  }, [restore]);
-
-  useEffect(() => {
-    if (me.isUnauthenticated) router.replace('/');
-  }, [me.isUnauthenticated, router]);
+  const right = auth.isSignedIn ? (
+    me.data ? <AllocationHUD /> : null
+  ) : auth.status === 'unknown' ? null : (
+    <button
+      type="button"
+      onClick={() => {
+        auth.signIn();
+      }}
+      disabled={auth.signingIn}
+      className="inline-flex h-9 items-center rounded-md bg-accent px-3 text-sm font-medium text-text-inverse transition-colors hocus:bg-accent-hi disabled:opacity-60"
+    >
+      {auth.signingIn ? 'Signing in…' : 'Sign in'}
+    </button>
+  );
 
   return (
     <div className="flex min-h-dvh flex-col bg-bg-0">
-      <TopBar title={title ?? pageTitle} right={me.data ? <AllocationHUD /> : null} />
+      <TopBar title={title ?? pageTitle} right={right} />
       {me.data && (
         <WalletSheet
           user={me.data}
-          busy={{ topUp: topUp.isPending, close: closeSession.isPending, settings: settings.isPending, signOut: auth.signOut.isPending }}
+          busy={{ close: closeSession.isPending, settings: settings.isPending, signOut: auth.signOut.isPending }}
           onTopUp={() => {
-            topUp.mutate(suggestedDeposit);
+            openDeposit();
           }}
           onCloseSession={() => {
             closeSession.mutate();
@@ -81,9 +80,10 @@ export function AppShell({ children, title }: AppShellProps) {
           }}
         />
       )}
+      {auth.isSignedIn && <DepositDialog />}
       <ReceiptDrawer />
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 pt-6 pb-4">
-        {me.isPending ? (
+        {auth.status === 'unknown' || (auth.isSignedIn && me.isPending) ? (
           <div className="space-y-3" aria-busy="true">
             <Skeleton className="h-6 w-40" pill />
             <Skeleton className="h-28 w-full" />

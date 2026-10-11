@@ -9,6 +9,7 @@ import type { CatalogModel, Option, SliderPreset, TaskType } from '@/lib/api/typ
 
 import { useCatalog } from '@/hooks/useCatalog';
 import { useRecommend } from '@/hooks/useQuote';
+import { useAllocationStore } from '@/stores/allocationStore';
 import { useUiStore } from '@/stores/uiStore';
 
 import { ModelOptions } from '@/components/chat/ModelOptions';
@@ -33,6 +34,8 @@ export function ModelPicker({ currentModelId, prompt = '', slider, taskType = nu
   const open = useUiStore((s) => s.activeDialog === 'modelPicker');
   const closeDialog = useUiStore((s) => s.closeDialog);
   const catalog = useCatalog(taskType ?? undefined, open);
+  // Handover: `paidRunsEnabled: false` → hide paid models.
+  const paidRunsEnabled = useAllocationStore((s) => s.paidRunsEnabled);
   const recommend = useRecommend();
   const [q, setQ] = useState('');
   const [options, setOptions] = useState<Option[]>([]);
@@ -48,13 +51,13 @@ export function ModelPicker({ currentModelId, prompt = '', slider, taskType = nu
   }, [open, prompt]);
 
   const groups = useMemo(() => {
-    const list = catalog.data ?? [];
+    const list = (catalog.data ?? []).filter((m) => paidRunsEnabled || m.free);
     const needle = q.trim().toLowerCase();
     const filtered = needle ? list.filter((m) => `${m.label} ${m.provider} ${m.modelId}`.toLowerCase().includes(needle)) : list;
     const byProvider = new Map<string, CatalogModel[]>();
     for (const m of filtered) byProvider.set(m.provider || 'Other', [...(byProvider.get(m.provider || 'Other') ?? []), m]);
     return [...byProvider.entries()];
-  }, [catalog.data, q]);
+  }, [catalog.data, q, paidRunsEnabled]);
 
   const pick = (id: string) => {
     if (compareMode) {
@@ -79,7 +82,7 @@ export function ModelPicker({ currentModelId, prompt = '', slider, taskType = nu
           ) : (
             <ModelOptions
               title="Recommended for this message"
-              options={options}
+              options={paidRunsEnabled ? options : options.filter((o) => o.free)}
               selectedId={currentModelId}
               onPick={(o) => {
                 pick(o.modelId);

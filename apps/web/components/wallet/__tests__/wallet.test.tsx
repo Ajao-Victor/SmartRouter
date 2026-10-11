@@ -24,7 +24,7 @@ function wrap(ui: React.ReactElement) {
   );
 }
 
-const user = { address: '0x7a3f9c1e5b2d4a6f8e0c1b3d5f7a9c2e4b6d8f01', slider: 'balanced' as const, allocationUsd: micro(2_000_000), weeklyLimitUsd: micro(10_000_000), autoFreeFallback: true, freeRemaining: null };
+const user = { address: '0x7a3f9c1e5b2d4a6f8e0c1b3d5f7a9c2e4b6d8f01', slider: 'balanced' as const, allocationUsd: micro(2_000_000), weeklyLimitUsd: micro(10_000_000), autoFreeFallback: true, freeRemaining: null, id: 'user_1', email: 'a@b.co', loginMethod: 'email', usage: null, country: null };
 
 describe('WaitlistForm', () => {
   it('validates the email and posts email, country and interest', async () => {
@@ -71,12 +71,12 @@ describe('WalletSheet (payment session)', () => {
   });
 
   it('shows deposit, spent, remaining and offers Top up and Close on an open session', () => {
-    useAllocationStore.getState().hydrate({ suggestedDepositUsd: micro(2_000_000), network: 'moderato', session: { depositUsd: micro(2_000_000), spentUsd: micro(500_000), remainingUsd: micro(1_500_000), requests: 3, channelId: 'ch', status: 'open', openedAt: null } });
+    useAllocationStore.getState().hydrate({ suggestedDepositUsd: micro(2_000_000), paidRunsEnabled: true, usage: null, network: { name: null, chainId: 42431, token: null, recipient: null, operator: null }, session: { depositUsd: micro(2_000_000), spentUsd: micro(500_000), remainingUsd: micro(1_500_000), requests: 3, channelId: 'ch', status: 'open', openedAt: null } });
     const onClose = vi.fn();
     wrap(<WalletSheet user={user} onTopUp={vi.fn()} onCloseSession={onClose} onSignOut={vi.fn()} onSettings={vi.fn()} />);
     expect(screen.getByText('$0.50')).toBeInTheDocument();
     expect(screen.getByText('$1.50')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Top up $2' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New deposit' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Close and withdraw' }));
     expect(onClose).toHaveBeenCalled();
   });

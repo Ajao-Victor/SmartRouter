@@ -4,62 +4,35 @@ import { useCallback } from 'react';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { isApiError } from '@/lib/api/client';
-import { api } from '@/lib/api/endpoints';
-import { apiUnreachableHint } from '@/lib/api/errors';
-import { queryKeys } from '@/lib/api/keys';
-import { signInWithWallet } from '@/lib/tempo/siwe';
-import { connectWallet, disconnectWallet, getCurrentWallet, restoreWallet, setCurrentWallet } from '@/lib/tempo/wallet';
+import { logoutPrivy, openSignIn } from '@/lib/auth/session';
+import { signOutEverywhere } from '@/lib/auth/signIn';
 
 import { resetAllStores } from '@/stores';
-import { toast } from '@/stores/toastStore';
-import { useWalletStore } from '@/stores/walletStore';
+import { selectIsSignedIn, useAuthStore } from '@/stores/authStore';
 
 /**
- * Wallet sign-in (PDF "Wallet and sign-in"): connect the Tempo passkey → `POST /auth/challenge`
- * → sign the SIWE message → `POST /auth/verify` (cookie) → `GET /me`. The same account pays, so
- * the access key is authorized on the first paid run, not here.
+ * Sign-in with email or Google through Privy (Handover "Sign-in"). `signIn(then?)` opens the
+ * Privy modal; `then` runs once the SmartRouter session exists (used to send a guest's message).
+ * The exchange itself (`POST /auth/privy`) lives in `components/auth/AuthProvider`.
  */
 export function useAuth() {
   const qc = useQueryClient();
-  const status = useWalletStore((s) => s.status);
-  const address = useWalletStore((s) => s.address);
+  const status = useAuthStore((s) => s.status);
+  const account = useAuthStore((s) => s.account);
+  const isSignedIn = useAuthStore(selectIsSignedIn);
 
-  const signIn = useMutation({
-    mutationFn: async () => {
-      const w = useWalletStore.getState();
-      w.setStatus('connecting');
-      const wallet = await connectWallet();
-      setCurrentWallet(wallet);
-      w.setAccount({ address: wallet.address, kind: wallet.kind });
-      w.setStatus('signing');
-      await signInWithWallet(wallet.signer);
-      w.setSessionReady(true);
-      w.setStatus('connected');
-      return api.me.get();
-    },
-    onSuccess: (user) => {
-      qc.setQueryData(queryKeys.me(), user);
-      void qc.invalidateQueries({ queryKey: queryKeys.me() });
-    },
-    onError: (err) => {
-      const w = useWalletStore.getState();
-      const cancelled = err instanceof Error && (/cancel|abort|NotAllowed/i.test(err.message) || err.name === 'NotAllowedError');
-      w.setError(cancelled ? null : err instanceof Error ? err.message : 'Sign-in failed');
-      if (cancelled) toast.info('Sign-in cancelled');
-      else if (isApiError(err) && err.code === 'NETWORK') toast.error('Could not reach SmartRouter', apiUnreachableHint());
-      else if (isApiError(err) && err.code === 'FORBIDDEN') toast.error('This wallet is not allowed to sign in here', err.message);
-      else toast.error("Couldn't verify your signature. Try again.", isApiError(err) ? err.message : err instanceof Error ? err.message : undefined);
-    },
-  });
+  const signIn = useCallback((then?: () => void) => {
+    useAuthStore.getState().setAfterSignIn(then ?? null);
+    openSignIn();
+  }, []);
 
+  /** `POST /auth/logout`, then Privy's `logout()`, then clear the stored token. */
   const signOut = useMutation({
     mutationFn: async () => {
-      try {
-        await api.auth.logout();
-      } finally {
-        await disconnectWallet();
-      }
+      await signOutEverywhere(logoutPrivy);
+      // The open deposit stays open; the backend settles it after 10 idle minutes and closes it after 24 h.
+      const { resetSession } = await import('@/lib/tempo/session');
+      resetSession();
     },
     onSettled: () => {
       qc.clear();
@@ -67,16 +40,5 @@ export function useAuth() {
     },
   });
 
-  /** Silently rebuild the wallet from the stored passkey (no prompt); the cookie decides sign-in. */
-  const restore = useCallback(async () => {
-    if (getCurrentWallet()) return;
-    const wallet = await restoreWallet();
-    if (!wallet) return;
-    setCurrentWallet(wallet);
-    const w = useWalletStore.getState();
-    w.setAccount({ address: wallet.address, kind: wallet.kind });
-    w.setStatus('connected');
-  }, []);
-
-  return { signIn, signOut, restore, status, address };
+  return { signIn, signOut, status, account, isSignedIn, signingIn: status === 'signing_in' };
 }

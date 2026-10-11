@@ -8,22 +8,24 @@ import { api } from '@/lib/api/endpoints';
 import { queryKeys } from '@/lib/api/keys';
 
 import { useAllocationStore } from '@/stores/allocationStore';
+import { useUsageStore } from '@/stores/usageStore';
 
 /**
- * Payment session summary (`GET /sessions/current`): `suggestedDepositUsd`, `network`,
- * `session? { depositUsd, spentUsd, remainingUsd, requests }`. Refetches every 30 s and after
- * every `done` event (PDF: refresh the balance after each run); mirrored into `allocationStore`.
+ * Payment setup and the open deposit (`GET /sessions/current`): `paidRunsEnabled`, `network`,
+ * `suggestedDepositUsd`, `usage`, `session`. Asked on sign-in and refreshed after each `done`
+ * event, top-up and close — no polling (Handover "Usage banners").
  */
 export function useSession(enabled = true) {
   const hydrate = useAllocationStore((s) => s.hydrate);
   const query = useQuery({
     queryKey: queryKeys.session.current(),
     queryFn: ({ signal }) => api.sessions.current(signal),
-    refetchInterval: 30_000,
     enabled,
   });
   useEffect(() => {
-    if (query.data !== undefined) hydrate(query.data);
+    if (query.data === undefined) return;
+    hydrate(query.data);
+    if (query.data.usage) useUsageStore.getState().setUsage(query.data.usage);
   }, [query.data, hydrate]);
   return query;
 }

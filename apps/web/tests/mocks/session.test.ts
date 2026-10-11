@@ -1,8 +1,7 @@
-import { micro } from '@/lib/money';
-import { topUpSession, closeSession } from '@/lib/tempo/session';
+import { closeSession, paidFetch } from '@/lib/tempo/session';
 
 import { server } from './server';
-import { resetMockState, state } from './state';
+import { openSession, resetMockState, state } from './state';
 
 beforeAll(() => {
   server.listen({ onUnhandledRequest: 'error' });
@@ -16,10 +15,15 @@ afterAll(() => {
 });
 
 describe('mock-mode session calls', () => {
-  it('top-up and close go to the MSW stand-ins', async () => {
-    await topUpSession(micro(2_000_000));
+  it('close goes to the MSW stand-in (no top-up in v1: close, then a new deposit)', async () => {
+    openSession(2);
     expect(state.session?.depositUsd).toBe(2);
     await closeSession();
     expect(state.session).toBeNull();
+  });
+
+  it('paid runs go through the API helper on mocks', async () => {
+    const res = await paidFetch('/sessions/current');
+    expect(res.ok).toBe(true);
   });
 });

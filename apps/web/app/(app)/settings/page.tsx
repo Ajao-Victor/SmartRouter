@@ -11,12 +11,21 @@ import { useSettings } from '@/hooks/useSettings';
 import { toast } from '@/stores/toastStore';
 import { useUiStore } from '@/stores/uiStore';
 
+import { SignInGate } from '@/components/auth/SignInGate';
 import { PresetSlider } from '@/components/recommend/Slider';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Switch } from '@/components/ui/Switch';
 import { AllocationControls } from '@/components/wallet/AllocationControls';
 
 export default function SettingsPage() {
+  return (
+    <SignInGate what="your settings">
+      <Settings />
+    </SignInGate>
+  );
+}
+
+function Settings() {
   const me = useMe();
   const settings = useSettings();
   const auth = useAuth();
@@ -50,7 +59,7 @@ export default function SettingsPage() {
         <p className="text-sm text-text-2">Allocation, defaults and appearance. Saved to your account on change.</p>
       </header>
 
-      <section className="space-y-2" aria-label="Allocation">
+      <section id="limits" className="scroll-mt-20 space-y-2" aria-label="Allocation">
         <p className="num text-2xs tracking-wider-ui text-text-2 uppercase">Allocation</p>
         <AllocationControls allocationUsd={user.allocationUsd} weeklyLimitUsd={user.weeklyLimitUsd} autoFreeFallback={user.autoFreeFallback} disabled={settings.isPending} onChange={save} />
       </section>
@@ -62,6 +71,12 @@ export default function SettingsPage() {
 
       <section className="space-y-2 rounded-lg bg-bg-1 p-4 shadow-hairline" aria-label="Wallet">
         <p className="num text-2xs tracking-wider-ui text-text-2 uppercase">Wallet</p>
+        {user.email && (
+          <p className="text-sm text-text-0">
+            {user.email}
+            {user.loginMethod && <span className="text-text-2"> · signed in with {user.loginMethod === 'google' ? 'Google' : user.loginMethod}</span>}
+          </p>
+        )}
         <p className="num flex items-center gap-2 text-sm text-text-0">
           {shortHex(user.address, 8, 6)}
           {explorer && (
@@ -71,7 +86,7 @@ export default function SettingsPage() {
           )}
         </p>
         <p className="text-xs text-text-2">
-          Tempo {isTestnet ? 'Moderato testnet (pathUSD)' : 'mainnet (USDC.e)'}, chain {String(env.chainId)}. Balances are read from the chain and never stored.
+          Your Tempo wallet, created by Privy when you signed in. Tempo {isTestnet ? 'Moderato testnet (pathUSD)' : 'mainnet (USDC.e)'}, chain {String(env.chainId)}.
         </p>
       </section>
 
@@ -97,7 +112,7 @@ export default function SettingsPage() {
         >
           {auth.signOut.isPending ? 'Signing out…' : 'Sign out'}
         </button>
-        <p className="text-xs text-text-2">Signing out clears this device&apos;s session. Your deposit stays in the payment session until it closes.</p>
+        <p className="text-xs text-text-2">Signing out leaves the deposit open; the backend settles it after 10 idle minutes and closes it after 24 hours.</p>
       </section>
 
       <footer className="space-y-1 text-xs text-text-2">

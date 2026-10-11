@@ -1,33 +1,46 @@
 /**
- * Payment session (PDF "Paying for runs"): one `sessionManager` per signed-in user. The manager
- * does the 402 handshake, opens the escrow channel on the first paid call (the deposit, one
- * wallet approval), signs a voucher per paid run, tops up and closes. `paidRun` queues paid
- * calls so only one payment step is in flight (mppx throws otherwise); the lock is released as
- * soon as the answer starts streaming.
+ * Paying for runs (Handover "Paying for runs"). One `sessionManager` per signed-in user, built on
+ * a viem wallet client over the Privy embedded wallet, with `maxDeposit` = the deposit the user
+ * chose (default `suggestedDepositUsd`). The first paid run opens the deposit on-chain (the one
+ * approval); later runs sign a voucher with no prompt.
+ *
+ * - One paid run at a time: `paidFetch` queues calls (`paidRun`) so a second Send waits instead
+ *   of failing; the lock lifts as soon as the answer starts streaming.
+ * - When the deposit runs out: `manager.close()` (treasury receives what was spent, the rest
+ *   returns), then a new manager with the new `maxDeposit`. `manager.topUp` is not used in v1:
+ *   `maxDeposit` is a fixed local cap, so vouchers would still stop at the old cap.
  */
 import { createJsonChannelStore, sessionManager } from 'mppx/client';
+import { createWalletClient, custom, type EIP1193Provider } from 'viem';
 
-import { ApiError, apiUrl } from '@/lib/api/client';
+import { ApiError, apiRequest } from '@/lib/api/client';
 import { env } from '@/lib/env';
 import { idb } from '@/lib/idb';
 import { toUsdString, type MicroUsd } from '@/lib/money';
 
-import type { AccessKeyAccount } from './accessKey';
-import { getChainClient } from './chain';
+import { chainFor } from './chain';
+import { getPrivyWallet } from './privyWallet';
 
 export type SessionManager = ReturnType<typeof sessionManager>;
 
-const CHANNEL_PREFIX = 'sr:channel:';
+/** Reusable channels survive reloads, namespaced per wallet so two accounts never share one. */
+function channelStoreFor(address: string) {
+  const prefix = `sr:channel:${address.toLowerCase()}:`;
+  return createJsonChannelStore({
+    get: (key) => idb.get<string>(`${prefix}${key}`),
+    set: (key, value) => idb.set(`${prefix}${key}`, value),
+    delete: (key) => idb.del(`${prefix}${key}`),
+  });
+}
 
-/** Reusable channels survive reloads (keyed by payee/token/escrow/chain). */
-const channelStore = createJsonChannelStore({
-  get: (key) => idb.get<string>(`${CHANNEL_PREFIX}${key}`),
-  set: (key, value) => idb.set(`${CHANNEL_PREFIX}${key}`, value),
-  delete: (key) => idb.del(`${CHANNEL_PREFIX}${key}`),
-});
-
-/** Cookie-carrying fetch for the manager's probes, payments and paid retries. */
-export const credentialedFetch: typeof fetch = (input, init) => fetch(input, { ...init, credentials: 'include' });
+/** Handover: `fetch: (url, init) => api(String(url).replace(API_URL, ''), init)` — adds X-Session-Token. */
+const managerFetch: typeof fetch = (input, init) => {
+  if (input instanceof Request) {
+    const path = input.url.replace(env.apiUrl, '');
+    return apiRequest(path, { method: input.method, headers: input.headers, body: input.body, signal: input.signal, ...init });
+  }
+  return apiRequest(String(input).replace(env.apiUrl, ''), init);
+};
 
 interface Configured {
   manager: SessionManager;
@@ -39,22 +52,29 @@ let configured: Configured | null = null;
 let last: Promise<unknown> = Promise.resolve();
 
 /**
- * (Re)create the manager for the signed-in account. `maxDepositUsd` is the user's allocation —
- * the manager never deposits more than this, and throws locally when a run would exceed it.
+ * Create (or reuse) the manager for the signed-in Privy wallet. A different deposit amount only
+ * takes effect after `closeSession()` — the open deposit keeps its cap.
  */
-export function configureSession(args: { account: AccessKeyAccount; maxDepositUsd: MicroUsd }): SessionManager {
-  if (configured && configured.address === args.account.address && configured.maxDepositUsd === args.maxDepositUsd) return configured.manager;
+export async function ensureSession(args: { maxDepositUsd: MicroUsd; chainId?: number | null }): Promise<SessionManager | null> {
+  if (env.mock) return null;
+  const wallet = getPrivyWallet();
+  if (!wallet) throw new ApiError({ status: 401, code: 'UNAUTHENTICATED', message: 'Sign in to run paid models.' });
+  if (configured && configured.address.toLowerCase() === wallet.address.toLowerCase()) return configured.manager;
+
+  const chain = chainFor(args.chainId ?? env.chainId);
+  await wallet.switchChain?.(chain.id);
+  const provider = (await wallet.getEthereumProvider()) as EIP1193Provider;
+  const client = createWalletClient({ account: wallet.address as `0x${string}`, chain, transport: custom(provider) });
   const manager = sessionManager({
-    account: args.account,
-    client: getChainClient(),
-    allowedChainIds: [env.chainId],
-    maxDeposit: toUsdString(args.maxDepositUsd),
-    topUpAmount: toUsdString(args.maxDepositUsd),
-    fetch: credentialedFetch,
-    channelStore,
+    account: client.account,
+    client,
+    maxDeposit: toUsdString(args.maxDepositUsd), // e.g. '2' = $2 of USDC.e
+    fetch: managerFetch,
+    allowedChainIds: [chain.id],
+    channelStore: channelStoreFor(wallet.address),
     bootstrap: true,
   });
-  configured = { manager, address: args.account.address, maxDepositUsd: args.maxDepositUsd };
+  configured = { manager, address: wallet.address, maxDepositUsd: args.maxDepositUsd };
   return manager;
 }
 
@@ -62,55 +82,52 @@ export function getSessionManager(): SessionManager | null {
   return configured?.manager ?? null;
 }
 
+/** Forget the manager (sign-out, or before opening a new deposit). */
 export function resetSession(): void {
   configured = null;
   last = Promise.resolve();
 }
 
-/** Whether a paid call can be made right now (signed in + manager configured, or mocks). */
+/** Whether a paid call can be made right now (manager configured, or mocks). */
 export function isPaymentReady(): boolean {
   return env.mock || configured !== null;
 }
 
 /**
- * PDF `paidRun`: queue paid calls per session; the next run waits for this one's payment step
- * only, not for its whole stream. On mocks the request is a plain fetch (MSW answers).
+ * `paidRun`: queue paid calls per manager; the next run waits for this one's payment step only,
+ * not for its whole stream. On mocks the request is a plain `apiRequest` (MSW answers).
  */
-export function paidFetch(input: string | URL, init?: RequestInit): Promise<Response> {
-  if (env.mock) return credentialedFetch(input, init);
+export function paidFetch(path: string, init?: RequestInit): Promise<Response> {
+  if (env.mock) return apiRequest(path, init);
   const manager = configured?.manager;
-  if (!manager) return Promise.reject(new ApiError({ status: 0, code: 'PAYMENT_REQUIRED', message: 'Sign in with your wallet to run paid models.' }));
-  const res = last.then(() => manager.fetch(input, init));
+  if (!manager) return Promise.reject(new ApiError({ status: 0, code: 'PAYMENT_REQUIRED', message: 'Sign in to run paid models.' }));
+  const res = last.then(() => manager.fetch(`${env.apiUrl}${path}`, init));
   last = res.catch(() => undefined);
   return res;
 }
 
-/** Mock-only routes (MSW) standing in for the on-chain top-up / close the manager performs. */
-async function mockSessionCall(action: 'top-up' | 'close', body: unknown): Promise<void> {
-  const res = await credentialedFetch(apiUrl(`/mock/session/${action}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+/** Mock-only route (MSW) standing in for the on-chain close the manager performs. */
+async function mockClose(): Promise<void> {
+  const res = await apiRequest('/mock/session/close', { method: 'POST', body: '{}' });
   if (!res.ok) throw new ApiError({ status: res.status, code: 'PAYMENT_REQUIRED', message: 'Mock session call failed' });
 }
 
-/** User-initiated only (PDF: no automatic top-ups). */
-export async function topUpSession(amountUsd: MicroUsd): Promise<void> {
+/**
+ * Close the open deposit: settles on-chain — the treasury receives what was spent and the rest
+ * returns to the user. The manager is dropped so the next paid run opens a fresh deposit.
+ */
+export async function closeSession(args?: { maxDepositUsd: MicroUsd; chainId?: number | null }): Promise<void> {
   if (env.mock) {
-    await mockSessionCall('top-up', { amountUsd: toUsdString(amountUsd) });
+    await mockClose();
     return;
   }
-  const manager = configured?.manager;
-  if (!manager) throw new ApiError({ status: 0, code: 'PAYMENT_REQUIRED', message: 'No payment session yet. Run a paid model first to open one.' });
-  await manager.topUp(toUsdString(amountUsd));
-}
-
-/** Closes the channel; the unspent deposit returns to the wallet. */
-export async function closeSession(): Promise<void> {
-  if (env.mock) {
-    await mockSessionCall('close', {});
-    return;
+  // After a reload there may be no manager yet; build one so it can recover and close the channel.
+  const manager = configured?.manager ?? (args ? await ensureSession(args) : null);
+  try {
+    if (manager) await manager.close();
+  } finally {
+    resetSession();
   }
-  const manager = configured?.manager;
-  if (!manager) return;
-  await manager.close();
 }
 
 export { toPaymentError } from './paymentErrors';

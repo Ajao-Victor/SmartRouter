@@ -69,45 +69,100 @@ const isoDate = z.string();
 
 /* ------------------------------------- auth ------------------------------------ */
 
-export const challengeInputSchema = z.object({ address: z.string(), origin: z.string() });
-export type ChallengeInput = z.input<typeof challengeInputSchema>;
-/** `POST /auth/challenge` → a SIWE message with a one-time nonce. */
-export const challengeResponseSchema = z.preprocess(alias({ message: ['siweMessage', 'challenge'] }), z.object({ message: z.string().min(1) }));
+/** `POST /auth/privy { identityToken }` (Handover "Sign-in flow", step 3). */
+export interface PrivySignInInput {
+  identityToken: string;
+}
+/** → `{ userId, address, email, loginMethod, token, expiresAt }`; `address` is the Tempo wallet. */
+export const privySignInSchema = z.object({
+  userId: z.string(),
+  address: z.string(),
+  email: z.string().nullish().transform((v) => v ?? null),
+  loginMethod: z.string().nullish().transform((v) => v ?? null),
+  token: z.string().min(1),
+  expiresAt: isoDate.nullish().transform((v) => v ?? null),
+});
+export type PrivySignIn = z.output<typeof privySignInSchema>;
 
-export const verifyInputSchema = z.object({ message: z.string(), signature: z.string() });
-export type VerifyInput = z.input<typeof verifyInputSchema>;
+/* ------------------------------------ usage ------------------------------------ */
+
+/**
+ * Handover "Usage banners": the same `usage` object comes from `GET /me`, `GET /sessions/current`,
+ * the paid `meta` event and the `done` event. The backend computes the banner; the UI only
+ * renders `usage.alert`.
+ */
+export const usageAlertSchema = z.object({
+  level: z.enum(['warning', 'critical', 'exhausted']),
+  meter: z.enum(['weekly', 'deposit']),
+  usedPct: z.number(),
+  message: z.string(),
+  action: z.enum(['top_up', 'raise_limit']),
+});
+export type UsageAlert = z.output<typeof usageAlertSchema>;
+
+export const usageSchema = z.object({
+  weekly: z.object({ spentUsd: usdOrZero, limitUsd: usdOrZero, usedPct: z.number().default(0) }).nullish().transform((v) => v ?? null),
+  deposit: z
+    .object({ channelId: z.string().nullish(), depositUsd: usdOrZero, spentUsd: usdOrZero, remainingUsd: usdOrZero, usedPct: z.number().default(0) })
+    .nullish()
+    .transform((v) => v ?? null),
+  alert: usageAlertSchema.nullish().transform((v) => v ?? null),
+});
+export type Usage = z.output<typeof usageSchema>;
 
 /* ------------------------------------ users ------------------------------------ */
 
-/** `GET /me`: address, slider, allocation, weekly limit, autoFreeFallback. */
-export const userSchema = z.preprocess(
+/** `PATCH /me/settings` → the updated settings (and `GET /me` nests the same object). */
+export const settingsSchema = z.preprocess(
   alias({
-    address: ['tempoAddress', 'tempo_address', 'wallet'],
     allocationUsd: ['allocation', 'allocation_usd'],
     weeklyLimitUsd: ['weeklyLimit', 'weekly_limit', 'weekly_limit_usd'],
     autoFreeFallback: ['auto_free_fallback'],
-    freeRemaining: ['freeMessagesRemaining', 'freeLeft'],
   }),
   z.object({
-    address: z.string(),
     slider: sliderSchema.default('balanced'),
-    /** Allocation size (PDF default $2). */
+    /** Preferred deposit (handover: `suggestedDepositUsd` returns it next time). */
     allocationUsd: usdSchema.default(2),
-    /** Weekly spending limit (PDF example $10/week). */
+    /** Weekly spending limit (0–1000). */
     weeklyLimitUsd: usdSchema.default(10),
     autoFreeFallback: z.boolean().default(true),
-    /** ASSUMPTION: free messages left today, when the backend includes it. */
-    freeRemaining: z.number().int().nonnegative().nullish().transform((v) => v ?? null),
+    country: z.string().nullish().transform((v) => v ?? null),
   }),
+);
+export type Settings = z.output<typeof settingsSchema>;
+
+/**
+ * `GET /me` → `{ id, address, email, loginMethod, usage, settings }`. Settings are flattened onto
+ * the user so screens read `user.slider`, `user.allocationUsd` … directly.
+ */
+export const userSchema = z.preprocess(
+  (v) => {
+    if (!v || typeof v !== 'object') return v;
+    const src = alias({ address: ['tempoAddress', 'tempo_address', 'wallet'], freeRemaining: ['freeRemainingToday', 'freeMessagesRemaining', 'freeLeft'] })(v) as Record<string, unknown>;
+    const nested = src.settings && typeof src.settings === 'object' ? (src.settings as Record<string, unknown>) : {};
+    return { ...src, ...nested };
+  },
+  z
+    .object({
+      id: z.string().nullish().transform((v) => v ?? null),
+      address: z.string(),
+      email: z.string().nullish().transform((v) => v ?? null),
+      loginMethod: z.string().nullish().transform((v) => v ?? null),
+      usage: usageSchema.nullish().transform((v) => v ?? null),
+      /** Free messages left today, when the backend includes it. */
+      freeRemaining: z.number().int().nonnegative().nullish().transform((v) => v ?? null),
+    })
+    .and(settingsSchema),
 );
 export type User = z.output<typeof userSchema>;
 
-/** `PATCH /me/settings { slider?, allocationUsd?, weeklyLimitUsd?, autoFreeFallback? }`. */
+/** `PATCH /me/settings { slider?, allocationUsd? (0.5–100), weeklyLimitUsd? (0–1000), autoFreeFallback?, country? }`. */
 export interface SettingsPatch {
   slider?: SliderPreset;
   allocationUsd?: number;
   weeklyLimitUsd?: number;
   autoFreeFallback?: boolean;
+  country?: string;
 }
 
 /* ---------------------------------- catalogue ---------------------------------- */
@@ -163,6 +218,9 @@ export const recommendResponseSchema = z.preprocess(
   z.object({
     options: z.array(optionSchema),
     taskType: taskTypeSchema.nullish().transform((v) => v ?? null),
+    /** Handover "Guest mode": signed out → `guest: true` and no quotes (`quoteId: null`). */
+    guest: z.boolean().default(false),
+    freeRemainingToday: z.number().int().nonnegative().nullish().transform((v) => v ?? null),
   }),
 );
 export type RecommendResponse = z.output<typeof recommendResponseSchema>;
@@ -202,6 +260,7 @@ export const createChatResponseSchema = z.preprocess(
     options: z.array(optionSchema).default([]),
     taskType: taskTypeSchema.nullish().transform((v) => v ?? null),
     title: z.string().nullish().transform((v) => v ?? null),
+    freeRemainingToday: z.number().int().nonnegative().nullish().transform((v) => v ?? null),
   }),
 );
 export type CreateChatResponse = z.output<typeof createChatResponseSchema>;
@@ -300,11 +359,28 @@ export const sessionSummarySchema = z.preprocess(
 );
 export type SessionSummary = z.output<typeof sessionSummarySchema>;
 
+/** `network` on `/sessions/current`: the chain to build the wallet client on (Handover "Paid messages", step 2). */
+export const paymentNetworkSchema = z.preprocess(
+  (v) => (typeof v === 'string' ? { name: v } : v),
+  z.object({
+    name: z.string().nullish().transform((v) => v ?? null),
+    chainId: z.coerce.number().int().positive().nullish().transform((v) => v ?? null),
+    token: z.string().nullish().transform((v) => v ?? null),
+    recipient: z.string().nullish().transform((v) => v ?? null),
+    operator: z.string().nullish().transform((v) => v ?? null),
+  }),
+);
+export type PaymentNetwork = z.output<typeof paymentNetworkSchema>;
+
+/** `GET /sessions/current` → `{ paidRunsEnabled, network, suggestedDepositUsd, usage, session }`. */
 export const sessionsCurrentSchema = z.preprocess(
   alias({ suggestedDepositUsd: ['suggestedDeposit', 'suggested_deposit_usd'] }),
   z.object({
+    /** Handover: false → hide paid models. */
+    paidRunsEnabled: z.boolean().default(true),
     suggestedDepositUsd: usdSchema.default(2),
-    network: z.string().default(''),
+    network: paymentNetworkSchema.nullish().transform((v) => v ?? null),
+    usage: usageSchema.nullish().transform((v) => v ?? null),
     session: sessionSummarySchema.nullish().transform((v) => v ?? null),
   }),
 );
