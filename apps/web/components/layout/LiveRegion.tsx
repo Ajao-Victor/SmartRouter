@@ -6,10 +6,9 @@ import { useModelLabel } from '@/hooks/useModelLabel';
 import { useAllocationStore } from '@/stores/allocationStore';
 import { selectAnyStreaming, useStreamStore } from '@/stores/streamStore';
 
-
 /**
- * Screen-reader announcements (UI_UX_Brief §10): "Streaming…", "Done — {model}",
- * "Allocation used". A single polite live region, updated only on state transitions.
+ * Screen-reader announcements: "Streaming…", "Done — {model}", "Allocation used". A single
+ * polite live region, updated only on state transitions.
  */
 export function LiveRegion() {
   const streaming = useStreamStore(selectAnyStreaming);
@@ -17,8 +16,8 @@ export function LiveRegion() {
   const status = useAllocationStore((s) => s.status);
   const [message, setMessage] = useState('');
   const wasStreaming = useRef(false);
-  const lastDoneModel = Object.values(entries).filter((e) => e.status === 'done').at(-1)?.modelId ?? null;
-  const model = useModelLabel(lastDoneModel);
+  const last = Object.values(entries).filter((e) => e.status === 'done').at(-1);
+  const model = useModelLabel(last?.modelId ?? null, last?.label);
 
   useEffect(() => {
     if (streaming && !wasStreaming.current) setMessage('Streaming reply…');
