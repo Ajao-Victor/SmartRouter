@@ -343,3 +343,30 @@
 ## Cut plan (PDF order)
 1. Task 17/23 Compare parts → `cut` (flag off).
 2. Task 23 music/JobCard polling → `cut` (flag off); images stay.
+
+---
+
+## Phase 5 — Live backend, chat redesign, Vercel (2026-10-10 → 2026-10-11)
+
+Source of truth from here on: **`SmartRouter Frontend Architecture.pdf` (Oct 9, 2026)**. Everything marked *(proposed)* above is superseded by that contract.
+
+### Task 30 — Git authorship  `done` (2026-10-10)
+- `git config user.name "Victor Oluwatimileyin Ajao"`; every commit since carries no AI attribution. History rewrite to strip the 45 earlier `Co-Authored-By` trailers is prepared (`backup/pre-rewrite-2026-10-10` branch; command in `memory.md`) and must be run by the repo owner (`git filter-branch` + force push).
+
+### Task 31 — Live contract foundation  `done` (2026-10-10; commits from 504d831 through eec900b)
+- `lib/env.ts` (four PDF public vars), `lib/money.ts` (USD ↔ micro), `lib/api/types.ts` (Zod shapes for every route), `lib/api/client.ts` (plain fetch, `credentials: 'include'`, uppercase error codes), `lib/api/endpoints.ts` (every route), `lib/api/sse.ts` (fetch + ReadableStream reader for `meta/delta/fallback/pending/done/error`, `:` heartbeats, 60 s watchdog), `lib/api/errors.ts` (one code → one UI action).
+- `lib/tempo/`: viem chain client, passkey root account (`viem/tempo`), WebCrypto access key with a signed key authorization, SIWE sign-in, `mppx` `sessionManager` with the paid-run queue, wallet facade (mock account on `NEXT_PUBLIC_MOCK=1`).
+- Stores: allocation (mirrors `/sessions/current`), stream (live SSE buffers), wallet, composer (+ options from `POST /chats`). Hooks: auth, me, session, catalog, quote/recommend, chats, chat cache, receipts/requests, pending polling, feedback/compare vote, settings, model labels, top-up, close session, `useRun` (quote → affordability → payment prep → `/run` → events → charge).
+**Acceptance:** lint, typecheck, 123 unit tests incl. the mock-API contract tests.
+
+### Task 32 — Chat UI redesign  `done` (2026-10-11)
+- Minimal, Claude-like chat: plain assistant turns with a meta line (model · charge · latency · rating · receipt), quiet user bubbles, one composer box (Enter sends, Shift+Enter newline, price on the Send button, Stop while streaming), options as rows, model picker sheet (recommended for this message, then the catalogue), compare as two plain columns, inline Top up / Continue free, low-balance banner, static top bar with New chat / Activity / Settings.
+- WebGL field, glow trails, particles, HoloCards, glitch text and spring choreography removed from the app routes; they remain on the landing page only (`components/landing/LandingFx`).
+- New pages: `/activity` (`GET /requests`), settings on `PATCH /me/settings` (USD), wallet sheet = payment session (deposit / spent / remaining / requests, Top up, Close and withdraw).
+
+### Task 33 — Mocks and tests on the live contract  `done` (2026-10-11)
+- `tests/mocks/` reimplements every PDF route incl. SSE `/run`, PDF error codes, option ranking (top 2 + best quality + free), pending jobs, session accounting, mock-only `/mock/session/top-up|close` stand-ins for the `mppx` manager. Unit and e2e suites rewritten.
+
+### Task 34 — Vercel preparation  `done` (2026-10-11)
+- `.env.example`, `.env.local`, `.env` with the four PDF variables (testnet defaults) + optional flags; `next.config.ts` CSP = API + RPC + Sentry, `frame-src 'none'`, WebAuthn permissions, `optimizePackageImports`; `vercel.json`; `Deployment_Guide.md` (root directory `apps/web`, `main` = mainnet, `staging` = testnet, domains, `APP_ORIGINS`, checklist).
+**Acceptance:** `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm guard:hosts`, `pnpm build` green.
