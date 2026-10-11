@@ -44,6 +44,7 @@ export function optimisticMessage(over: Partial<Message> & Pick<Message, 'role' 
     requestId: null,
     createdAt: new Date().toISOString(),
     chargedUsd: null,
+    seq: null,
     files: [],
     citations: [],
     status: 'done',

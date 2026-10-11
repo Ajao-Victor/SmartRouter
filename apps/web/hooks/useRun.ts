@@ -81,6 +81,7 @@ export function useRun(chatId: string) {
     const wallet = getCurrentWallet();
     if (!wallet) throw new ApiError({ status: 0, code: 'UNAUTHENTICATED', message: 'Sign in with your wallet to run paid models.' });
     if (useWalletStore.getState().paymentsReady) return;
+    if (wallet.kind === 'passkey') toast.info('Setting up payments', 'Approve once in your passkey prompt. This deposits your allocation into a payment session.');
     try {
       await wallet.preparePayments(useAllocationStore.getState().suggestedDepositUsd);
       useWalletStore.getState().setPaymentsReady(true);
@@ -101,7 +102,8 @@ export function useRun(chatId: string) {
         {
           onMeta: (m) => {
             useStreamStore.getState().setMeta(messageId, { requestId: m.requestId, modelId: m.modelId, label: m.label, priceUsd: m.priceUsd, free: m.free, userMessageId: m.userMessageId ?? null, assistantMessageId: m.assistantMessageId ?? null });
-            if (m.remainingUsd !== null && m.remainingUsd !== undefined) useAllocationStore.getState().setRemaining(m.remainingUsd);
+            if (m.usage?.deposit) useAllocationStore.getState().applyUsage(m.usage.deposit);
+            else if (m.remainingUsd !== null && m.remainingUsd !== undefined) useAllocationStore.getState().setRemaining(m.remainingUsd);
             cache.update(messageId, { requestId: m.requestId, modelId: m.modelId });
             if (m.userMessageId) cache.update(userMessageId, { id: m.userMessageId });
           },
@@ -127,7 +129,8 @@ export function useRun(chatId: string) {
       if (outcome.kind === 'done') {
         const d = outcome.data;
         useStreamStore.getState().done(messageId, { chargedUsd: d.chargedUsd, latencyMs: d.latencyMs ?? null, requestId: d.requestId, files: d.files, citations: d.citations, text: d.text });
-        if (!quote.free) useAllocationStore.getState().applyCharge(d.chargedUsd);
+        if (d.usage?.deposit) useAllocationStore.getState().applyUsage(d.usage.deposit);
+        else if (!quote.free) useAllocationStore.getState().applyCharge(d.chargedUsd);
         const entry = useStreamStore.getState().byMessageId[messageId];
         cache.update(messageId, { text: d.text ?? entry?.text ?? '', status: 'done', requestId: d.requestId, modelId: d.modelId || entry?.modelId || quote.modelId, chargedUsd: d.chargedUsd, files: d.files, citations: d.citations });
         refresh();
@@ -162,7 +165,7 @@ export function useRun(chatId: string) {
         case 'ALLOCATION_EXHAUSTED':
         case 'PAYMENT_REQUIRED': {
           const parsed = freeFallbackSchema.safeParse((e.details as { freeFallback?: unknown } | undefined)?.freeFallback ?? {});
-          setNeedsTopUp({ priceUsd, prompt, freeFallback: parsed.success ? parsed.data : { available: true, remaining: null, modelId: FREE_MODEL_ID } });
+          setNeedsTopUp({ priceUsd, prompt, freeFallback: parsed.success ? parsed.data : { available: true, remaining: null, modelId: FREE_MODEL_ID, auto: false } });
           return 'needs_top_up';
         }
         case 'QUOTE_EXPIRED':
@@ -213,7 +216,7 @@ export function useRun(chatId: string) {
             toast.info('Allocation used — continuing free');
             return runFree(prompt);
           }
-          setNeedsTopUp({ priceUsd: price, prompt, freeFallback: { available: true, remaining: null, modelId: FREE_MODEL_ID } });
+          setNeedsTopUp({ priceUsd: price, prompt, freeFallback: { available: true, remaining: null, modelId: FREE_MODEL_ID, auto: false } });
           return 'needs_top_up';
         }
       }
@@ -275,7 +278,7 @@ export function useRun(chatId: string) {
       if (total > 0) {
         const alloc = useAllocationStore.getState();
         if (alloc.status === 'closed' || !selectCanAfford(total)(alloc)) {
-          setNeedsTopUp({ priceUsd: total, prompt, freeFallback: { available: true, remaining: null, modelId: FREE_MODEL_ID } });
+          setNeedsTopUp({ priceUsd: total, prompt, freeFallback: { available: true, remaining: null, modelId: FREE_MODEL_ID, auto: false } });
           return 'needs_top_up';
         }
       }
