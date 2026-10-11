@@ -3,46 +3,42 @@ import path from 'node:path';
 import type { NextConfig } from 'next';
 
 /**
- * Content Security Policy — see security.md §4.
- * The browser talks only to the SmartRouter API, Tempo (via the SDK) and Sentry.
- * Provider MPP hosts are never allowed here and never appear in this bundle
- * (enforced by `pnpm guard:hosts`).
+ * Content Security Policy — see security.md §4 and the architecture PDF ("Vercel environment
+ * variables"). The browser talks to exactly three places: the SmartRouter API, the public Tempo
+ * RPC (viem wallet client) and Sentry. Provider MPP hosts never appear in this bundle
+ * (`pnpm guard:hosts`). The API is called directly — never through a Vercel rewrite — so the
+ * backend sees the real client IP and the `sr_session` cookie stays first-party.
  */
 const isDev = process.env.NODE_ENV !== 'production';
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
+const network = process.env.NEXT_PUBLIC_TEMPO_NETWORK === 'tempo' ? 'tempo' : 'moderato';
+const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/+$/, '');
+const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL ?? (network === 'tempo' ? 'https://rpc.tempo.xyz' : 'https://rpc.moderato.tempo.xyz');
 const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN ?? '';
 const objectStorageHost = process.env.NEXT_PUBLIC_OBJECT_STORAGE_HOST ?? '';
-// GAP (Backend_Gaps_Report §8): Tempo SDK origins for connect-src / frame-src are unconfirmed.
-const tempoOrigins = (process.env.NEXT_PUBLIC_TEMPO_ORIGINS ?? '').split(',').filter(Boolean);
 
-const sentryOrigin = (() => {
+const originOf = (u: string): string => {
   try {
-    return sentryDsn ? new URL(sentryDsn).origin : '';
+    return u ? new URL(u).origin : '';
   } catch {
     return '';
   }
-})();
+};
 
-const connectSrc = ["'self'", apiUrl, sentryOrigin, ...tempoOrigins].filter(Boolean).join(' ');
-const frameSrc = ["'self'", ...tempoOrigins].filter(Boolean).join(' ');
-const mediaSrc = ["'self'", 'blob:', objectStorageHost ? `https://${objectStorageHost}` : '']
-  .filter(Boolean)
-  .join(' ');
-const imgSrc = ["'self'", 'data:', 'blob:', objectStorageHost ? `https://${objectStorageHost}` : '']
-  .filter(Boolean)
-  .join(' ');
+const connectSrc = ["'self'", originOf(apiUrl), originOf(rpcUrl), originOf(sentryDsn)].filter(Boolean).join(' ');
+const mediaSrc = ["'self'", 'blob:', objectStorageHost ? `https://${objectStorageHost}` : ''].filter(Boolean).join(' ');
+const imgSrc = ["'self'", 'data:', 'blob:', objectStorageHost ? `https://${objectStorageHost}` : ''].filter(Boolean).join(' ');
 
 const csp = [
   `default-src 'self'`,
-  // three.js needs wasm-unsafe-eval; Next dev needs unsafe-eval/unsafe-inline for HMR.
+  // three.js (landing field) needs wasm-unsafe-eval; Next dev needs unsafe-eval/unsafe-inline for HMR.
   `script-src 'self' 'wasm-unsafe-eval'${isDev ? " 'unsafe-eval' 'unsafe-inline'" : " 'unsafe-inline'"}`,
   `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
   `font-src 'self' https://fonts.gstatic.com data:`,
   `img-src ${imgSrc}`,
   `media-src ${mediaSrc}`,
-  `connect-src ${connectSrc}${isDev ? ' ws: wss:' : ''}`,
-  `frame-src ${frameSrc}`,
+  `connect-src ${connectSrc}${isDev ? ' ws: wss: http://localhost:* http://127.0.0.1:*' : ''}`,
+  `frame-src 'none'`,
   `worker-src 'self' blob:`,
   `frame-ancestors 'none'`,
   `base-uri 'self'`,
@@ -54,7 +50,8 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(self)' },
+  // WebAuthn (Tempo passkeys) needs publickey-credentials-*; nothing else is granted.
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(self), publickey-credentials-get=(self), publickey-credentials-create=(self)' },
 ];
 
 const nextConfig: NextConfig = {
@@ -65,19 +62,20 @@ const nextConfig: NextConfig = {
   // Sentry's OpenTelemetry hooks use dynamic require(); keep them external to silence the
   // "Critical dependency" warning without affecting the client bundle.
   serverExternalPackages: ['require-in-the-middle', '@opentelemetry/instrumentation', 'import-in-the-middle'],
-  // Monorepo root for file tracing (silences the multiple-lockfile warning).
+  // Monorepo root for file tracing (silences the multiple-lockfile warning on Vercel).
   outputFileTracingRoot: path.join(__dirname, '../../'),
   images: {
-    remotePatterns: objectStorageHost
-      ? [{ protocol: 'https', hostname: objectStorageHost }]
-      : [],
+    remotePatterns: objectStorageHost ? [{ protocol: 'https', hostname: objectStorageHost }] : [],
+  },
+  experimental: {
+    // Trim the big icon/animation packages to what is imported.
+    optimizePackageImports: ['lucide-react', 'motion'],
   },
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }];
   },
   webpack(config: { ignoreWarnings?: unknown[] }) {
-    // Sentry's OpenTelemetry hooks use dynamic require(); the warning is benign for this app.
-    config.ignoreWarnings = [...(config.ignoreWarnings ?? []), { module: /require-in-the-middle|import-in-the-middle|@opentelemetry/ }];
+    config.ignoreWarnings = [...(config.ignoreWarnings ?? []), { module: /require-in-the-middle|import-in-the-middle|/ }, { module: /ox\/_esm\/tempo\/internal\/virtualMasterPool/ }];
     return config;
   },
 };
