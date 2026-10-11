@@ -103,13 +103,6 @@ export function ChatWorkspace({ chatId }: ChatWorkspaceProps) {
     };
   }, [chat.data?.title, setPageTitle]);
 
-  useEffect(
-    () => () => {
-      useComposerStore.getState().setPendingOptions(null);
-    },
-    [],
-  );
-
   /** `POST /chats/:id/quote { prompt, modelId? }` for the draft; the newest request wins. */
   const fetchQuote = useCallback(
     async (p: string, modelId: string | null): Promise<Quote | null> => {
