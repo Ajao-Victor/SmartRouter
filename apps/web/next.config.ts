@@ -75,7 +75,7 @@ const nextConfig: NextConfig = {
     return [{ source: '/(.*)', headers: securityHeaders }];
   },
   webpack(config: { ignoreWarnings?: unknown[] }) {
-    config.ignoreWarnings = [...(config.ignoreWarnings ?? []), { module: /require-in-the-middle|import-in-the-middle|@opentelemetry/ }, { module: /ox/_esm/tempo/internal/virtualMasterPool/ }];
+    config.ignoreWarnings = [...(config.ignoreWarnings ?? []), { module: /require-in-the-middle|import-in-the-middle|@opentelemetry/ }, { module: /virtualMasterPool/ }];
     return config;
   },
 };
