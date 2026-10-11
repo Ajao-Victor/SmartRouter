@@ -2,17 +2,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { micro } from '@/lib/money';
 
-import { ReducedMotionProvider } from '@/components/layout/ReducedMotionProvider';
-
 import { TopUpBar } from '../TopUpBar';
 
-const wrap = (ui: React.ReactElement) => render(<ReducedMotionProvider forceReduced>{ui}</ReducedMotionProvider>);
-
 describe('TopUpBar', () => {
-  it('shows both PDF buttons side by side', () => {
+  it('shows the PDF copy with Top up and Continue free side by side', () => {
     const onTopUp = vi.fn();
     const onContinueFree = vi.fn();
-    wrap(<TopUpBar topUpMicro={micro(2_000_000)} onTopUp={onTopUp} onContinueFree={onContinueFree} />);
+    render(<TopUpBar topUpUsd={micro(2_000_000)} onTopUp={onTopUp} onContinueFree={onContinueFree} />);
     expect(screen.getByRole('alert')).toHaveTextContent('Allocation used — Top up $2');
     fireEvent.click(screen.getByRole('button', { name: 'Top up $2' }));
     fireEvent.click(screen.getByRole('button', { name: 'Continue free' }));
@@ -20,13 +16,15 @@ describe('TopUpBar', () => {
     expect(onContinueFree).toHaveBeenCalled();
   });
 
-  it('shows the auto-free notice when fallback is on', () => {
-    wrap(<TopUpBar topUpMicro={micro(2_000_000)} onTopUp={vi.fn()} onContinueFree={vi.fn()} autoFree />);
-    expect(screen.getByRole('status')).toHaveTextContent('Allocation used — continuing free');
+  it('disables Continue free when details.freeFallback says the quota is used up', () => {
+    render(<TopUpBar topUpUsd={micro(2_000_000)} onTopUp={vi.fn()} onContinueFree={vi.fn()} freeAvailable={false} />);
+    expect(screen.getByRole('button', { name: 'Continue free' })).toBeDisabled();
+    expect(screen.getByText(/reset at 00:00 UTC/)).toBeInTheDocument();
   });
 
-  it('disables Continue free when the free quota is exhausted', () => {
-    wrap(<TopUpBar topUpMicro={micro(2_000_000)} onTopUp={vi.fn()} onContinueFree={vi.fn()} autoFree freeAvailable={false} />);
-    expect(screen.getByRole('button', { name: 'Continue free' })).toBeDisabled();
+  it('explains a weekly limit without offering a top-up', () => {
+    render(<TopUpBar topUpUsd={micro(2_000_000)} onTopUp={vi.fn()} onContinueFree={vi.fn()} reason="weekly_limit" />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Weekly spending limit reached');
+    expect(screen.queryByRole('button', { name: /Top up/ })).toBeNull();
   });
 });
