@@ -479,7 +479,7 @@ export type ServerErrorCode = (typeof API_ERROR_CODES)[number];
 
 /** `details.freeFallback` on ALLOCATION_EXHAUSTED: whether free is available and how many are left. */
 export const freeFallbackSchema = z.preprocess(
-  alias({ available: ['free', 'ok'], remaining: ['left', 'messagesLeft', 'freeMessagesLeft'] }),
+  alias({ available: ['free', 'ok'], remaining: ['freeRemainingToday', 'left', 'messagesLeft', 'freeMessagesLeft'] }),
   z.object({ available: z.boolean().default(false), remaining: z.number().int().nonnegative().nullish().transform((v) => v ?? null), modelId: z.string().default(FREE_MODEL_ID) }),
 );
 export type FreeFallback = z.output<typeof freeFallbackSchema>;
