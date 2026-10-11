@@ -66,8 +66,20 @@ export async function connectWallet(): Promise<ConnectedWallet> {
   return fromRoot(created.account);
 }
 
+let current: ConnectedWallet | null = null;
+
+/** The connected wallet for this tab (non-serialisable, so it lives here, not in a store). */
+export function getCurrentWallet(): ConnectedWallet | null {
+  return current;
+}
+
+export function setCurrentWallet(wallet: ConnectedWallet | null): void {
+  current = wallet;
+}
+
 /** Forget this device's passkey reference and access key; the on-chain account is untouched. */
 export async function disconnectWallet(): Promise<void> {
+  current = null;
   resetSession();
   await forgetPasskey();
   await forgetAccessKey();
