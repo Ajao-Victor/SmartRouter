@@ -18,6 +18,8 @@ export interface ConnectedWallet {
   address: string;
   kind: 'passkey' | 'mock';
   signer: MessageSigner;
+  /** The passkey root account (null on mocks) — signs on-chain transfers. */
+  root: RootAccount | null;
   /** Prepares payments: authorizes the access key once (passkey prompt) and configures the manager. */
   preparePayments: (maxDepositUsd: MicroUsd) => Promise<void>;
 }
@@ -33,6 +35,7 @@ function mockWallet(): ConnectedWallet {
   return {
     address: MOCK_ADDRESS,
     kind: 'mock',
+    root: null,
     signer: {
       address: MOCK_ADDRESS,
       signMessage: () =>
@@ -51,6 +54,7 @@ function fromRoot(root: RootAccount): ConnectedWallet {
   return {
     address: root.address,
     kind: 'passkey',
+    root,
     signer: { address: root.address, signMessage: (args) => root.signMessage(args) },
     preparePayments: async (maxDepositUsd) => {
       const [{ accessKeyAccount, ensureKeyAuthorization }, { configureSession }] = await Promise.all([accessKeys(), sessions()]);
