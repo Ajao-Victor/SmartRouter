@@ -5,7 +5,9 @@
  * calls so only one payment step is in flight (mppx throws otherwise); the lock is released as
  * soon as the answer starts streaming.
  */
-import { createJsonChannelStore, sessionManager, type SessionManager } from 'mppx/client';
+import { createJsonChannelStore, sessionManager } from 'mppx/client';
+
+export type SessionManager = ReturnType<typeof sessionManager>;
 
 import { ApiError } from '@/lib/api/client';
 import { env } from '@/lib/env';
