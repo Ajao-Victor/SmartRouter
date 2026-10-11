@@ -18,9 +18,9 @@ function NewChatScreen() {
   return (
     <div className="space-y-10">
       <NewChat initialCategory={parsed.success ? parsed.data : null} />
-      <section className="space-y-3">
-        <p className="num text-2xs tracking-label text-text-2 uppercase">Recent</p>
-        <ChatList chats={chats.data} loading={chats.isPending} />
+      <section className="space-y-2">
+        <p className="num px-2 text-2xs tracking-wider-ui text-text-2 uppercase">Recent</p>
+        <ChatList chats={chats.data?.chats} loading={chats.isPending} />
       </section>
     </div>
   );
