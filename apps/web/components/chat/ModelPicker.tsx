@@ -1,124 +1,154 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-import type { Model, Recommendation } from '@/lib/api/types';
+import { clsx } from 'clsx';
+import { Check, Search } from 'lucide-react';
 
-import { useModels } from '@/hooks/useModels';
+import type { CatalogModel, Option, SliderPreset, TaskType } from '@/lib/api/types';
+
+import { useCatalog } from '@/hooks/useCatalog';
+import { useRecommend } from '@/hooks/useQuote';
 import { useUiStore } from '@/stores/uiStore';
 
-
-import { HoloCard } from '@/components/fx/HoloCard';
-import { Input } from '@/components/ui/Input';
+import { ModelOptions } from '@/components/chat/ModelOptions';
 import { PriceTag } from '@/components/ui/PriceTag';
 import { Sheet } from '@/components/ui/Sheet';
 import { Skeleton } from '@/components/ui/Skeleton';
 
 export interface ModelPickerProps {
-  /** The 4 recommended options for the current prompt, when a quote exists. */
-  recommendations?: Recommendation[];
   currentModelId: string | null;
+  /** The draft prompt — when present the sheet asks `POST /recommend` for options. */
+  prompt?: string;
+  slider?: SliderPreset;
+  taskType?: TaskType | null;
   onSelect: (modelId: string) => void;
+  compareMode?: boolean;
+  compareIds?: readonly (string | null)[];
+  onCompareToggle?: (modelId: string) => void;
 }
 
-/** Sheet listing recommended options first, then the full catalog grouped by provider, with search. */
-export function ModelPicker({ recommendations = [], currentModelId, onSelect }: ModelPickerProps) {
+/** Sheet: options recommended for the prompt first, then the whole catalogue grouped by provider. */
+export function ModelPicker({ currentModelId, prompt = '', slider, taskType = null, onSelect, compareMode = false, compareIds = [], onCompareToggle }: ModelPickerProps) {
   const open = useUiStore((s) => s.activeDialog === 'modelPicker');
   const closeDialog = useUiStore((s) => s.closeDialog);
-  const models = useModels();
+  const catalog = useCatalog(taskType ?? undefined, open);
+  const recommend = useRecommend();
   const [q, setQ] = useState('');
+  const [options, setOptions] = useState<Option[]>([]);
+
+  useEffect(() => {
+    if (!open || !prompt) {
+      setOptions([]);
+      return;
+    }
+    recommend.mutate({ prompt, ...(slider ? { slider } : {}), ...(taskType ? { taskType } : {}) }, { onSuccess: setOptions, onError: () => { setOptions([]); } });
+    // Re-run only when the sheet opens for a new prompt.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, prompt]);
 
   const groups = useMemo(() => {
-    const list = (models.data ?? []).filter((m) => m.active && m.verified);
+    const list = catalog.data ?? [];
     const needle = q.trim().toLowerCase();
-    const filtered = needle ? list.filter((m) => `${m.label} ${m.provider}`.toLowerCase().includes(needle)) : list;
-    const byProvider = new Map<string, Model[]>();
-    for (const m of filtered) byProvider.set(m.provider, [...(byProvider.get(m.provider) ?? []), m]);
+    const filtered = needle ? list.filter((m) => `${m.label} ${m.provider} ${m.modelId}`.toLowerCase().includes(needle)) : list;
+    const byProvider = new Map<string, CatalogModel[]>();
+    for (const m of filtered) byProvider.set(m.provider || 'Other', [...(byProvider.get(m.provider || 'Other') ?? []), m]);
     return [...byProvider.entries()];
-  }, [models.data, q]);
+  }, [catalog.data, q]);
 
   const pick = (id: string) => {
+    if (compareMode) {
+      onCompareToggle?.(id);
+      return;
+    }
     onSelect(id);
     closeDialog();
   };
 
   return (
-    <Sheet open={open} onClose={closeDialog} title="Switch model">
-      <p className="mb-4 text-xs text-text-2">Any turn can name another model; the new model receives the whole thread.</p>
-      {recommendations.length > 0 && (
-        <section className="mb-5 space-y-2">
-          <p className="num text-2xs tracking-wider-ui text-text-2 uppercase">Recommended for this prompt</p>
-          <div className="grid gap-2">
-            {recommendations.map((r) => (
-              <HoloCard
-                key={r.model_id}
-                tone={r.is_free ? 'free' : r.is_best_quality ? 'teal' : 'accent'}
-                selected={r.model_id === currentModelId}
-                tilt={3}
-                className="p-3"
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  pick(r.model_id);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') pick(r.model_id);
-                }}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-text-0">{r.label}</p>
-                    <p className="truncate text-xs text-text-2">{r.reason}</p>
-                  </div>
-                  <PriceTag micro={r.price} size="sm" freeLabel />
-                </div>
-              </HoloCard>
-            ))}
-          </div>
-        </section>
+    <Sheet open={open} onClose={closeDialog} title={compareMode ? 'Pick two models to compare' : 'Choose a model'}>
+      <p className="mb-4 text-xs text-text-2">The next turn runs on the model you pick; it receives the whole thread. Every price is quoted before you send.</p>
+
+      {prompt && (recommend.isPending || options.length > 0) && (
+        <div className="mb-5">
+          {recommend.isPending ? (
+            <div className="space-y-2" aria-busy="true">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : (
+            <ModelOptions
+              title="Recommended for this message"
+              options={options}
+              selectedId={currentModelId}
+              onPick={(o) => {
+                pick(o.modelId);
+              }}
+              compareMode={compareMode}
+              compareIds={compareIds}
+              {...(onCompareToggle ? { onCompareToggle } : {})}
+            />
+          )}
+        </div>
       )}
-      <Input
-        label="All models"
-        placeholder="Search by model or provider"
-        value={q}
-        onChange={(e) => {
-          setQ(e.target.value);
-        }}
-      />
-      <div className="mt-4 space-y-5">
-        {models.isPending && (
+
+      <label className="flex h-10 items-center gap-2 rounded-lg bg-bg-2 px-3 text-sm text-text-0 shadow-hairline focus-within:shadow-glow-accent">
+        <Search size={16} className="text-text-2" aria-hidden="true" />
+        <input
+          type="search"
+          placeholder="Search models or providers"
+          aria-label="Search models"
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+          }}
+          className="w-full bg-transparent outline-none placeholder:text-text-2"
+        />
+      </label>
+
+      <div className="mt-4 space-y-5 pb-2">
+        {catalog.isPending && (
           <div className="space-y-2" aria-busy="true">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-11 w-full" />
+            <Skeleton className="h-11 w-full" />
+            <Skeleton className="h-11 w-full" />
           </div>
         )}
+        {catalog.isError && <p className="text-sm text-signal">Could not load the catalogue.</p>}
         {groups.map(([provider, list]) => (
-          <section key={provider} className="space-y-2">
-            <p className="num text-2xs tracking-wider-ui text-text-2 uppercase">
-              {provider} <span className="text-text-2/70">· available via MPP</span>
-            </p>
-            <ul className="space-y-1.5">
-              {list.map((m) => (
-                <li key={m.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      pick(m.id);
-                    }}
-                    aria-pressed={m.id === currentModelId}
-                    className="glass hit-44 flex w-full items-center justify-between gap-3 rounded-md px-3 text-left transition-[box-shadow] hocus:shadow-glow-accent aria-pressed:shadow-glow-accent-strong"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm text-text-0">{m.label}</span>
-                      <span className="block truncate text-xs text-text-2">{m.task_types.join(' · ')}</span>
-                    </span>
-                    <PriceTag micro={m.price_est} size="sm" freeLabel tone={m.payment === 'free' ? 'free' : 'price'} />
-                  </button>
-                </li>
-              ))}
+          <section key={provider} className="space-y-1">
+            <p className="num px-1 text-2xs tracking-wider-ui text-text-2 uppercase">{provider}</p>
+            <ul className="space-y-0.5">
+              {list.map((m) => {
+                const active = compareMode ? compareIds.includes(m.modelId) : m.modelId === currentModelId;
+                return (
+                  <li key={m.modelId}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        pick(m.modelId);
+                      }}
+                      aria-pressed={active}
+                      className={clsx('flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition-colors hocus:bg-bg-2', active && 'bg-bg-2')}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className={clsx('flex h-4 w-4 shrink-0 items-center justify-center rounded-full', active ? 'bg-accent-2 text-text-inverse' : 'bg-bg-3')} aria-hidden="true">
+                          {active && <Check size={10} />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className={clsx('block truncate text-sm', m.free ? 'text-free' : 'text-text-0')}>{m.label}</span>
+                          {m.taskTypes.length > 0 && <span className="block truncate text-xs text-text-2">{m.taskTypes.join(' · ')}</span>}
+                        </span>
+                      </span>
+                      <PriceTag micro={m.priceUsd} size="sm" freeLabel tone={m.free ? 'free' : 'price'} />
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         ))}
+        {catalog.data && groups.length === 0 && <p className="text-sm text-text-2">No model matches.</p>}
       </div>
     </Sheet>
   );
