@@ -1,82 +1,64 @@
 'use client';
 
-import { forwardRef, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { clsx } from 'clsx';
-import { GitCompare, Paperclip, X } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { ArrowUp, GitCompare, Square } from 'lucide-react';
 
 import { env } from '@/lib/env';
-import type { MicroUsd } from '@/lib/money';
-import { useReducedMotionSafe } from '@/lib/motion/useReducedMotionSafe';
-import { fadeScale, withReduced } from '@/lib/motion/variants';
+import { formatUsd, type MicroUsd } from '@/lib/money';
 
-import { useComposerStore, type AttachmentRejection } from '@/stores/composerStore';
-import { toast } from '@/stores/toastStore';
+import { useComposerStore } from '@/stores/composerStore';
 import { useUiStore } from '@/stores/uiStore';
 
 import { ModelPill } from '@/components/chat/ModelPill';
-import { RunButton } from '@/components/chat/RunButton';
-import { FloatingDock } from '@/components/fx/FloatingDock';
-import { Button } from '@/components/ui/Button';
-import { Chip } from '@/components/ui/Chip';
 
-export interface ComposerProps {
-  /** `new`: no quote yet ("Get quote"); `chat`: run with price + ring. */
-  mode: 'new' | 'chat';
-  /** Current quote for the draft, if any. */
-  quote: { price: MicroUsd; expiresAt: string; isFree: boolean } | null;
-  currentModel: { label: string; isFree: boolean } | null;
-  onGetQuote: (prompt: string) => void;
-  onRun: () => void;
-  onQuoteExpired?: () => void;
-  disabled?: boolean;
-  /** Increment on 429 to shake the dock. */
-  cooldownKey?: number;
-  /** Inline (dev galleries) instead of fixed to the viewport. */
-  floating?: boolean;
-  placeholder?: string;
+export interface ComposerQuote {
+  priceUsd: MicroUsd;
+  free: boolean;
 }
 
-const MAX_ROWS = 6;
+export interface ComposerProps {
+  /** Fresh quote for the current draft and model, if any — its price goes on the Send button (PDF). */
+  quote: ComposerQuote | null;
+  quoting?: boolean;
+  running?: boolean;
+  currentModel: { label: string; isFree: boolean } | null;
+  onSend: (prompt: string) => void;
+  onStop?: () => void;
+  disabled?: boolean;
+  /** Increments on 429 → Send is paused for a few seconds. */
+  cooldownKey?: number;
+  placeholder?: string;
+  className?: string;
+}
 
-const rejectionText: Record<AttachmentRejection, string> = {
-  type: 'That file type is not supported (images, text or PDF).',
-  size: 'That file is too large.',
-  count: 'You can attach up to 4 files.',
-};
+const MAX_ROWS = 8;
+const COOLDOWN_MS = 10_000;
 
 /**
- * The floating composer (design.md §4.3): glass dock that lifts on focus, auto-growing textarea,
- * attachment chips, model pill, Compare toggle (feature-flagged) and the Run button with the live
- * price and quote ring. ⌘/Ctrl+Enter submits.
+ * The composer: one quiet box at the bottom of the thread. Enter sends, Shift+Enter breaks a
+ * line, the model control and the Compare toggle sit under the text, and the Send button shows
+ * the quoted price ("Send · $0.003" / "Send · Free").
  */
-export const Composer = forwardRef<HTMLButtonElement, ComposerProps>(function Composer(
-  {
-    mode,
-    quote,
-    currentModel,
-    onGetQuote,
-    onRun,
-    onQuoteExpired,
-    disabled = false,
-    cooldownKey = 0,
-    floating = true,
-    placeholder = 'Describe the task, or continue the conversation…',
-  },
-  runRef,
-) {
-  const reduced = useReducedMotionSafe();
+export function Composer({
+  quote,
+  quoting = false,
+  running = false,
+  currentModel,
+  onSend,
+  onStop,
+  disabled = false,
+  cooldownKey = 0,
+  placeholder = 'Message SmartRouter…',
+  className,
+}: ComposerProps) {
   const draft = useComposerStore((s) => s.draft);
   const setDraft = useComposerStore((s) => s.setDraft);
-  const attachments = useComposerStore((s) => s.attachments);
-  const addAttachment = useComposerStore((s) => s.addAttachment);
-  const removeAttachment = useComposerStore((s) => s.removeAttachment);
   const compareMode = useUiStore((s) => s.compareMode);
   const setCompareMode = useUiStore((s) => s.setCompareMode);
-  const [focused, setFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [coolingDown, setCoolingDown] = useState(false);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -86,129 +68,100 @@ export const Composer = forwardRef<HTMLButtonElement, ComposerProps>(function Co
     el.style.height = `${String(Math.min(el.scrollHeight, line * MAX_ROWS + 16))}px`;
   }, [draft]);
 
-  const canSubmit = draft.trim().length > 0 && !disabled;
+  useEffect(() => {
+    if (cooldownKey === 0) return;
+    setCoolingDown(true);
+    const t = window.setTimeout(() => {
+      setCoolingDown(false);
+    }, COOLDOWN_MS);
+    return () => {
+      window.clearTimeout(t);
+    };
+  }, [cooldownKey]);
+
+  const prompt = draft.trim();
+  const canSend = prompt.length > 0 && !disabled && !running && !coolingDown;
 
   const submit = () => {
-    if (!canSubmit) return;
-    if (quote) onRun();
-    else onGetQuote(draft.trim());
+    if (!canSend) return;
+    onSend(prompt);
   };
 
-  const onFiles = (files: FileList | null) => {
-    if (!files) return;
-    for (const f of Array.from(files)) {
-      const rejection = addAttachment(f);
-      if (rejection) toast.warn(rejectionText[rejection]);
-    }
-    if (fileRef.current) fileRef.current.value = '';
-  };
+  const sendLabel = quote ? (quote.free ? 'Send · Free' : `Send · ${formatUsd(quote.priceUsd)}`) : quoting ? 'Send · …' : 'Send';
 
   return (
-    <FloatingDock focused={focused} shakeKey={cooldownKey} floating={floating} className="overflow-visible">
-      <form
-        className="flex flex-col gap-2 p-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
+    <form
+      className={clsx('rounded-xl bg-bg-1 shadow-hairline-strong transition-[box-shadow] focus-within:shadow-glow-accent', className)}
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
+      <textarea
+        ref={textareaRef}
+        value={draft}
+        rows={1}
+        disabled={disabled}
+        placeholder={placeholder}
+        aria-label="Message"
+        onChange={(e) => {
+          setDraft(e.target.value);
         }}
-      >
-        <AnimatePresence initial={false}>
-          {attachments.length > 0 && (
-            <motion.ul
-              variants={withReduced(fadeScale, reduced)}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-              className="flex flex-wrap gap-2"
-              aria-label="Attachments"
-            >
-              {attachments.map((f, i) => (
-                <li key={`${f.name}-${String(i)}`}>
-                  <Chip tone="neutral" className="h-8 px-2.5 text-xs" onClick={() => { removeAttachment(i); }} aria-label={`Remove ${f.name}`}>
-                    <span className="max-w-[10rem] truncate">{f.name}</span>
-                    <X size={12} aria-hidden="true" />
-                  </Chip>
-                </li>
-              ))}
-            </motion.ul>
-          )}
-        </AnimatePresence>
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            submit();
+          }
+        }}
+        className="max-h-56 w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-base leading-6 text-text-0 outline-none placeholder:text-text-2"
+      />
 
-        <textarea
-          ref={textareaRef}
-          value={draft}
-          rows={1}
-          disabled={disabled}
-          placeholder={placeholder}
-          aria-label="Prompt"
-          onChange={(e) => {
-            setDraft(e.target.value);
-          }}
-          onFocus={() => {
-            setFocused(true);
-          }}
-          onBlur={() => {
-            setFocused(false);
-          }}
-          onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          className="max-h-40 w-full resize-none bg-transparent px-2 py-1.5 text-base leading-6 text-text-0 outline-none placeholder:text-text-2"
-        />
-
-        <div className="flex items-center gap-2">
-          <input
-            ref={fileRef}
-            type="file"
-            multiple
-            accept="image/png,image/jpeg,image/webp,text/plain,application/pdf"
-            className="sr-only"
-            aria-label="Attach files"
-            onChange={(e) => {
-              onFiles(e.target.files);
-            }}
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Attach"
+      <div className="flex items-center gap-1 px-2 pb-2">
+        <ModelPill label={currentModel?.label ?? null} isFree={currentModel?.isFree ?? false} disabled={disabled} />
+        {env.flagCompare && (
+          <button
+            type="button"
+            aria-pressed={compareMode}
+            aria-label="Compare two models"
             disabled={disabled}
-            onClick={() => fileRef.current?.click()}
-          >
-            <Paperclip size={18} />
-          </Button>
-          <ModelPill label={currentModel?.label ?? null} isFree={currentModel?.isFree ?? false} auto={mode === 'chat'} />
-          {env.flagCompare && mode === 'chat' && (
-            <Chip
-              tone="teal"
-              selected={compareMode}
-              className={clsx('h-9 px-3 text-xs', 'hidden sm:inline-flex')}
-              onClick={() => {
-                setCompareMode(!compareMode);
-              }}
-              aria-label="Compare two models"
-            >
-              <GitCompare size={14} aria-hidden="true" />
-              Compare
-            </Chip>
-          )}
-          <div className="flex-1" />
-          <RunButton
-            ref={runRef}
-            quote={quote}
-            onGetQuote={() => {
-              onGetQuote(draft.trim());
+            onClick={() => {
+              setCompareMode(!compareMode);
             }}
-            onRun={onRun}
-            {...(onQuoteExpired ? { onQuoteExpired } : {})}
-            disabled={!canSubmit}
-            size="md"
-          />
-        </div>
-      </form>
-    </FloatingDock>
+            className={clsx(
+              'inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors hocus:bg-bg-2 disabled:opacity-50',
+              compareMode ? 'bg-accent-2/15 text-accent-2' : 'text-text-1 hocus:text-text-0',
+            )}
+          >
+            <GitCompare size={14} aria-hidden="true" />
+            Compare
+          </button>
+        )}
+        <div className="flex-1" />
+        {coolingDown && <span className="mr-2 text-xs text-warn">Too many requests — one moment</span>}
+        {running ? (
+          <button
+            type="button"
+            onClick={onStop}
+            aria-label="Stop"
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-bg-2 px-3 text-sm font-medium text-text-0 transition-colors hocus:bg-bg-3"
+          >
+            <Square size={14} aria-hidden="true" /> Stop
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={!canSend}
+            aria-label={sendLabel}
+            className={clsx(
+              'num inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+              quote?.free ? 'bg-free/15 text-free hocus:bg-free/25' : 'bg-accent text-text-inverse hocus:bg-accent-hi',
+            )}
+          >
+            {sendLabel}
+            <ArrowUp size={16} aria-hidden="true" />
+          </button>
+        )}
+      </div>
+    </form>
   );
-});
+}
