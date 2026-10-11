@@ -50,7 +50,7 @@ function topUpReason(details: unknown): NeedsTopUp['reason'] {
   return details && typeof details === 'object' && (details as { reason?: unknown }).reason === 'weekly_limit' ? 'weekly_limit' : 'deposit';
 }
 
-const FREE_FALLBACK_DEFAULT: FreeFallback = { available: true, remaining: null, modelId: FREE_MODEL_ID };
+const FREE_FALLBACK_DEFAULT: FreeFallback = { available: true, remaining: null, modelId: FREE_MODEL_ID, auto: false };
 
 export interface ComparePair {
   compareGroup: string;

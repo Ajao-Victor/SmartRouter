@@ -40,7 +40,7 @@ export function toUiAction(err: unknown): UiErrorAction {
     case 'ALLOCATION_EXHAUSTED':
     case 'PAYMENT_REQUIRED': {
       const parsed = freeFallbackSchema.safeParse(detail(err, 'freeFallback') ?? {});
-      return { kind: 'top_up', freeFallback: parsed.success ? parsed.data : { available: false, remaining: null, modelId: FREE_MODEL_ID } };
+      return { kind: 'top_up', freeFallback: parsed.success ? parsed.data : { available: false, remaining: null, modelId: FREE_MODEL_ID, auto: false } };
     }
     case 'QUOTE_EXPIRED':
     case 'VALIDATION_FAILED':
