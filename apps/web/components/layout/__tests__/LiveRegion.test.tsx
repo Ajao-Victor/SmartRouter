@@ -8,7 +8,7 @@ import { useStreamStore } from '@/stores/streamStore';
 
 import { LiveRegion } from '../LiveRegion';
 
-vi.mock('@/lib/api/endpoints', () => ({ api: { models: { list: vi.fn().mockResolvedValue([]) } } }));
+vi.mock('@/lib/api/endpoints', () => ({ api: { catalog: { list: vi.fn().mockResolvedValue([]) } } }));
 
 describe('LiveRegion', () => {
   it('announces streaming, completion and allocation used', () => {
@@ -22,15 +22,15 @@ describe('LiveRegion', () => {
     const region = screen.getByTestId('live-region');
     expect(region).toHaveAttribute('aria-live', 'polite');
     act(() => {
-      useStreamStore.getState().start('m1', { modelId: 'x' });
+      useStreamStore.getState().start('m1', { modelId: 'x', label: 'Model X' });
     });
     expect(region).toHaveTextContent('Streaming reply…');
     act(() => {
-      useStreamStore.getState().done('m1');
+      useStreamStore.getState().done('m1', { chargedUsd: micro(0), latencyMs: 1, requestId: 'r', files: [], citations: [] });
     });
     expect(region).toHaveTextContent(/^Done/);
     act(() => {
-      useAllocationStore.getState().hydrateFromSession({ channel_id: 'c', user_id: 'u', authorized_signer: 's', deposit: micro(100), highest_voucher: micro(100), counted: micro(0), settled: micro(0), last_used_at: null, status: 'open' });
+      useAllocationStore.getState().hydrate({ suggestedDepositUsd: micro(2_000_000), network: 'moderato', session: { depositUsd: micro(100), spentUsd: micro(100), remainingUsd: micro(0), requests: 1, channelId: 'c', status: 'open', openedAt: null } });
     });
     expect(region).toHaveTextContent('Allocation used — Top up');
   });

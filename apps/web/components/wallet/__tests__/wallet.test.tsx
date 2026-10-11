@@ -3,11 +3,14 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { micro } from '@/lib/money';
 
+import { useAllocationStore } from '@/stores/allocationStore';
+import { useUiStore } from '@/stores/uiStore';
+
 import { ReducedMotionProvider } from '@/components/layout/ReducedMotionProvider';
 
 import { AllocationControls } from '../AllocationControls';
-import { SpendPermissionCard } from '../SpendPermissionCard';
 import { WaitlistForm } from '../WaitlistForm';
+import { WalletSheet } from '../WalletSheet';
 
 const join = vi.fn();
 vi.mock('@/lib/api/endpoints', () => ({ api: { waitlist: { join: (i: unknown) => join(i) as Promise<void> } } }));
@@ -20,6 +23,8 @@ function wrap(ui: React.ReactElement) {
     </QueryClientProvider>,
   );
 }
+
+const user = { address: '0x7a3f9c1e5b2d4a6f8e0c1b3d5f7a9c2e4b6d8f01', slider: 'balanced' as const, allocationUsd: micro(2_000_000), weeklyLimitUsd: micro(10_000_000), autoFreeFallback: true, freeRemaining: null };
 
 describe('WaitlistForm', () => {
   it('validates the email and posts email, country and interest', async () => {
@@ -37,36 +42,42 @@ describe('WaitlistForm', () => {
   });
 });
 
-describe('AllocationControls', () => {
-  it('steps allocation and weekly limit and toggles auto free fallback', () => {
+describe('AllocationControls (PATCH /me/settings)', () => {
+  it('steps allocation and weekly limit in USD and toggles auto free fallback', () => {
     const onChange = vi.fn();
-    wrap(<AllocationControls allocation={micro(2_000_000)} weeklyLimit={micro(10_000_000)} autoFreeFallback onChange={onChange} />);
+    wrap(<AllocationControls allocationUsd={micro(2_000_000)} weeklyLimitUsd={micro(10_000_000)} autoFreeFallback onChange={onChange} />);
     fireEvent.click(screen.getByRole('button', { name: 'Increase Allocation size' }));
-    expect(onChange).toHaveBeenCalledWith({ allocation: 3_000_000 });
+    expect(onChange).toHaveBeenCalledWith({ allocationUsd: 3 });
     fireEvent.click(screen.getByRole('button', { name: 'Decrease Spending limit' }));
-    expect(onChange).toHaveBeenCalledWith({ weekly_limit: 5_000_000 });
+    expect(onChange).toHaveBeenCalledWith({ weeklyLimitUsd: 5 });
     fireEvent.click(screen.getByRole('switch', { name: 'Auto free fallback' }));
-    expect(onChange).toHaveBeenCalledWith({ auto_free_fallback: false });
+    expect(onChange).toHaveBeenCalledWith({ autoFreeFallback: false });
   });
 });
 
-describe('SpendPermissionCard', () => {
-  it('shows the scoped facts and offers approve or revoke by status', () => {
-    const onApprove = vi.fn();
-    const onRevoke = vi.fn();
-    const { rerender } = wrap(<SpendPermissionCard status="none" onApprove={onApprove} onRevoke={onRevoke} />);
-    expect(screen.getByText(/USDC\.e/)).toBeInTheDocument();
-    expect(screen.getByText('Open and top up sessions only')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Approve with passkey' }));
-    expect(onApprove).toHaveBeenCalled();
-    rerender(
-      <QueryClientProvider client={new QueryClient()}>
-        <ReducedMotionProvider forceReduced>
-          <SpendPermissionCard status="granted" expiresAt="2026-11-07T00:00:00Z" onApprove={onApprove} onRevoke={onRevoke} />
-        </ReducedMotionProvider>
-      </QueryClientProvider>,
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
-    expect(onRevoke).toHaveBeenCalled();
+describe('WalletSheet (payment session)', () => {
+  beforeEach(() => {
+    useAllocationStore.getState().reset();
+    useUiStore.setState({ walletSheetOpen: true, sdkDialogOpen: false });
+  });
+
+  it('explains the first deposit when there is no session', () => {
+    const onTopUp = vi.fn();
+    wrap(<WalletSheet user={user} onTopUp={onTopUp} onCloseSession={vi.fn()} onSignOut={vi.fn()} onSettings={vi.fn()} />);
+    expect(screen.getByText(/No deposit yet/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Deposit $2' }));
+    expect(onTopUp).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Close and withdraw' })).toBeNull();
+  });
+
+  it('shows deposit, spent, remaining and offers Top up and Close on an open session', () => {
+    useAllocationStore.getState().hydrate({ suggestedDepositUsd: micro(2_000_000), network: 'moderato', session: { depositUsd: micro(2_000_000), spentUsd: micro(500_000), remainingUsd: micro(1_500_000), requests: 3, channelId: 'ch', status: 'open', openedAt: null } });
+    const onClose = vi.fn();
+    wrap(<WalletSheet user={user} onTopUp={vi.fn()} onCloseSession={onClose} onSignOut={vi.fn()} onSettings={vi.fn()} />);
+    expect(screen.getByText('$0.50')).toBeInTheDocument();
+    expect(screen.getByText('$1.50')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Top up $2' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close and withdraw' }));
+    expect(onClose).toHaveBeenCalled();
   });
 });

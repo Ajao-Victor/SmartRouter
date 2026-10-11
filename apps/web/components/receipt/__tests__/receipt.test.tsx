@@ -1,26 +1,18 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { micro } from '@/lib/money';
-
-import { ReducedMotionProvider } from '@/components/layout/ReducedMotionProvider';
-
 import { ReceiptView } from '../ReceiptView';
 import { TxHashReveal } from '../TxHashReveal';
 
 const HASH = `0x${'ab12'.repeat(16)}`;
 const get = vi.fn();
 vi.mock('@/lib/api/endpoints', () => ({
-  api: { requests: { get: (id: string) => get(id) as Promise<unknown> }, models: { list: vi.fn().mockResolvedValue([]) } },
+  api: { requests: { get: (id: string) => get(id) as Promise<unknown> }, catalog: { list: vi.fn().mockResolvedValue([]) } },
 }));
 
 function wrap(ui: React.ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <ReducedMotionProvider forceReduced>{ui}</ReducedMotionProvider>
-    </QueryClientProvider>,
-  );
+  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
 }
 
 describe('TxHashReveal', () => {
@@ -31,7 +23,7 @@ describe('TxHashReveal', () => {
     expect(screen.getByLabelText(`Transaction ${HASH}`)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Copy transaction hash' }));
     expect(writeText).toHaveBeenCalledWith(HASH);
-    expect(screen.getByRole('link', { name: 'View on Tempo explorer' })).toHaveAttribute('href', expect.stringContaining(HASH));
+    expect(screen.getByRole('link', { name: 'View on Tempo explorer' })).toHaveAttribute('href', `https://explore.testnet.tempo.xyz/tx/${HASH}`);
   });
 
   it('refuses invalid hashes', () => {
@@ -41,18 +33,24 @@ describe('TxHashReveal', () => {
   });
 });
 
-describe('ReceiptView', () => {
-  it('renders the PDF receipt fields and pending settlement', async () => {
+describe('ReceiptView (GET /requests/:id)', () => {
+  it('renders the charge, latency, status and refund', async () => {
     get.mockResolvedValue({
-      id: 'req_1', user_id: 'u', quote_id: 'q', chat_id: 'c', channel_id: 'ch_demo_0001', model_id: 'm', is_free: false,
-      price: micro(900), provider_cost: micro(818), latency_ms: 1234, provider_receipt: 'mpp_rcpt_1', status: 'done',
-      voucher_amount: micro(900), tx_hash: null, created_at: new Date().toISOString(),
+      requestId: 'req_1', status: 'succeeded', modelId: 'm', label: 'GLM 5.3 Flash', chatId: 'c', chargedUsd: 900, refundedUsd: null, latencyMs: 1234, text: 'x', files: [], citations: [], error: null, free: false, createdAt: new Date().toISOString(), compareGroup: null, txHash: HASH,
     });
     wrap(<ReceiptView requestId="req_1" />);
-    expect((await screen.findAllByText('$0.0009')).length).toBeGreaterThanOrEqual(1);
-    // provider cost $0.000818 displays rounded to four decimals
-    expect(screen.getByText('$0.0008')).toBeInTheDocument();
+    expect(await screen.findByText('$0.0009')).toBeInTheDocument();
+    expect(screen.getByText('GLM 5.3 Flash')).toBeInTheDocument();
     expect(screen.getByText('1.2 s')).toBeInTheDocument();
-    expect(screen.getByText(/pending · settles every \$1 or hourly/)).toBeInTheDocument();
+    expect(screen.getByText('Succeeded')).toBeInTheDocument();
+    expect(screen.getByLabelText(`Transaction ${HASH}`)).toBeInTheDocument();
+  });
+
+  it('shows a failed, refunded run as free of charge', async () => {
+    get.mockResolvedValue({ requestId: 'req_2', status: 'failed', modelId: 'm', chargedUsd: 0, refundedUsd: 900, latencyMs: null, error: 'Provider failed', free: false });
+    wrap(<ReceiptView requestId="req_2" />);
+    expect(await screen.findByText('Failed')).toBeInTheDocument();
+    expect(screen.getByText('Free')).toBeInTheDocument();
+    expect(screen.getByText('Provider failed')).toBeInTheDocument();
   });
 });
