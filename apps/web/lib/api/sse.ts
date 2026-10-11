@@ -13,7 +13,7 @@ import { ApiError, apiUrl, errorFromFetchFailure, errorFromResponse, isApiError 
 import { RUN_PATH } from '@/lib/api/endpoints';
 import { fileSchema, usdSchema, type RunInput } from '@/lib/api/types';
 import { micro } from '@/lib/money';
-import { paidFetch, toPaymentError } from '@/lib/tempo/session';
+import { toPaymentError } from '@/lib/tempo/paymentErrors';
 
 export const HEARTBEAT_MS = 15_000;
 /** PDF: answers can take over a minute to start; heartbeats keep the connection open. */
@@ -169,7 +169,10 @@ async function openRun(body: RunInput, free: boolean, signal: AbortSignal): Prom
     signal,
   };
   try {
-    return free ? await fetch(apiUrl(RUN_PATH), init) : await paidFetch(apiUrl(RUN_PATH), init);
+    if (free) return await fetch(apiUrl(RUN_PATH), init);
+    // mppx (and viem) load on the first paid run only.
+    const { paidFetch } = await import('@/lib/tempo/session');
+    return await paidFetch(apiUrl(RUN_PATH), init);
   } catch (err) {
     if (isApiError(err)) throw err;
     throw toPaymentError(err) ?? errorFromFetchFailure(err);

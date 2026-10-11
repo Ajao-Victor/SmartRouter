@@ -3,7 +3,6 @@ import { parseFrames, runStream, WATCHDOG_MS } from '../sse';
 const fetchSpy = vi.fn<(input: string | URL, init?: RequestInit) => Promise<Response>>();
 vi.mock('@/lib/tempo/session', () => ({
   paidFetch: (input: string | URL, init?: RequestInit) => fetchSpy(input, init),
-  toPaymentError: () => null,
 }));
 
 /** A stream that never closes but errors when the fetch signal aborts (like a real fetch). */
