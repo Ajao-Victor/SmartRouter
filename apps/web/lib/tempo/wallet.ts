@@ -2,14 +2,16 @@
  * Wallet facade used by the hooks: connect/restore a Tempo passkey account, derive the
  * access-key account for payments, and sign out. On `NEXT_PUBLIC_MOCK=1` a deterministic mock
  * account stands in so the whole UI runs offline against MSW.
+ *
+ * viem/tempo and mppx are imported lazily so the chat route's first load stays small; they
+ * arrive on sign-in and on the first paid run.
  */
 import { env } from '@/lib/env';
 import { idb } from '@/lib/idb';
 import type { MicroUsd } from '@/lib/money';
 
-import { accessKeyAccount, ensureKeyAuthorization, forgetAccessKey, type AccessKeyAccount } from './accessKey';
-import { createPasskey, forgetPasskey, getStoredPasskey, loadPasskey, type RootAccount } from './passkey';
-import { configureSession, resetSession } from './session';
+import type { AccessKeyAccount } from './accessKey';
+import type { RootAccount } from './passkey';
 import type { MessageSigner } from './siwe';
 
 export interface ConnectedWallet {
@@ -21,12 +23,25 @@ export interface ConnectedWallet {
 }
 
 const MOCK_ADDRESS = '0x7a3f9c1e5b2d4a6f8e0c1b3d5f7a9c2e4b6d8f01';
+const PASSKEY_KEY = 'sr:passkey';
+
+const passkeys = () => import('./passkey');
+const accessKeys = () => import('./accessKey');
+const sessions = () => import('./session');
 
 function mockWallet(): ConnectedWallet {
   return {
     address: MOCK_ADDRESS,
     kind: 'mock',
-    signer: { address: MOCK_ADDRESS, signMessage: () => new Promise((r) => setTimeout(() => { r(`0xmock${'00'.repeat(64)}`); }, 400)) },
+    signer: {
+      address: MOCK_ADDRESS,
+      signMessage: () =>
+        new Promise((r) => {
+          setTimeout(() => {
+            r(`0xmock${'00'.repeat(64)}`);
+          }, 400);
+        }),
+    },
     preparePayments: () => Promise.resolve(),
   };
 }
@@ -38,6 +53,7 @@ function fromRoot(root: RootAccount): ConnectedWallet {
     kind: 'passkey',
     signer: { address: root.address, signMessage: (args) => root.signMessage(args) },
     preparePayments: async (maxDepositUsd) => {
+      const [{ accessKeyAccount, ensureKeyAuthorization }, { configureSession }] = await Promise.all([accessKeys(), sessions()]);
       access ??= await accessKeyAccount(root);
       await ensureKeyAuthorization(root, access, env.chainId);
       configureSession({ account: access, maxDepositUsd });
@@ -47,7 +63,8 @@ function fromRoot(root: RootAccount): ConnectedWallet {
 
 /** Restore the wallet silently from the stored passkey (no prompt). */
 export async function restoreWallet(): Promise<ConnectedWallet | null> {
-  if (env.mock) return (await getStoredPasskey()) ? mockWallet() : null;
+  if (env.mock) return (await idb.get(PASSKEY_KEY)) ? mockWallet() : null;
+  const { loadPasskey } = await passkeys();
   const found = await loadPasskey();
   return found ? fromRoot(found.account) : null;
 }
@@ -55,10 +72,13 @@ export async function restoreWallet(): Promise<ConnectedWallet | null> {
 /** Connect: reuse the device passkey or create one (one platform dialog). */
 export async function connectWallet(): Promise<ConnectedWallet> {
   if (env.mock) {
-    await new Promise((r) => setTimeout(r, 500));
-    await idb.set('sr:passkey', { id: 'mock', publicKey: '0x', address: MOCK_ADDRESS, createdAt: new Date().toISOString() });
+    await new Promise((r) => {
+      setTimeout(r, 500);
+    });
+    await idb.set(PASSKEY_KEY, { id: 'mock', publicKey: '0x', address: MOCK_ADDRESS, createdAt: new Date().toISOString() });
     return mockWallet();
   }
+  const { loadPasskey, createPasskey } = await passkeys();
   const existing = await loadPasskey();
   if (existing) return fromRoot(existing.account);
   const created = await createPasskey('SmartRouter');
@@ -79,6 +99,11 @@ export function setCurrentWallet(wallet: ConnectedWallet | null): void {
 /** Forget this device's passkey reference and access key; the on-chain account is untouched. */
 export async function disconnectWallet(): Promise<void> {
   current = null;
+  if (env.mock) {
+    await idb.del(PASSKEY_KEY);
+    return;
+  }
+  const [{ forgetPasskey }, { forgetAccessKey }, { resetSession }] = await Promise.all([passkeys(), accessKeys(), sessions()]);
   resetSession();
   await forgetPasskey();
   await forgetAccessKey();
