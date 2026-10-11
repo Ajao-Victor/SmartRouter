@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 
-import type { SliderPreset, TaskType } from '@/lib/api/types';
+import type { Option, SliderPreset, TaskType } from '@/lib/api/types';
+
+/** Options returned by `POST /chats` for a described task — shown once in the new chat. */
+export interface PendingOptions {
+  chatId: string;
+  prompt: string;
+  options: Option[];
+}
 
 export interface ComposerState {
   draft: string;
@@ -12,6 +19,7 @@ export interface ComposerState {
   selectedModelId: string | null;
   /** Compare mode picks (feature-flagged). */
   compareModelIds: [string | null, string | null];
+  pendingOptions: PendingOptions | null;
 }
 
 export interface ComposerActions {
@@ -21,6 +29,7 @@ export interface ComposerActions {
   selectModel: (modelId: string | null) => void;
   setCompareModel: (slot: 0 | 1, modelId: string | null) => void;
   clearCompare: () => void;
+  setPendingOptions: (pending: PendingOptions | null) => void;
   reset: () => void;
 }
 
@@ -30,6 +39,7 @@ const initialState: ComposerState = {
   sliderOverride: null,
   selectedModelId: null,
   compareModelIds: [null, null],
+  pendingOptions: null,
 };
 
 /** Composer state: draft and routing choices for the next turn. In-memory only. */
@@ -56,6 +66,9 @@ export const useComposerStore = create<ComposerState & ComposerActions>()((set) 
   },
   clearCompare: () => {
     set({ compareModelIds: [null, null] });
+  },
+  setPendingOptions: (pendingOptions) => {
+    set({ pendingOptions });
   },
   reset: () => {
     set(initialState);
