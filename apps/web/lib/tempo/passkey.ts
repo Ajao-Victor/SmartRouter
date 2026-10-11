@@ -51,7 +51,7 @@ export async function createPasskey(label = 'SmartRouter'): Promise<{ account: R
  * Use an existing passkey. With a stored credential the account is rebuilt silently; without
  * one the platform picker runs (`getCredential`) and the public key is read from the store.
  */
-export async function usePasskey(): Promise<{ account: RootAccount; stored: StoredPasskey } | null> {
+export async function loadPasskey(): Promise<{ account: RootAccount; stored: StoredPasskey } | null> {
   const stored = await getStoredPasskey();
   if (!stored) return null;
   return { account: rootAccountFrom(stored), stored };

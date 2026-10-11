@@ -8,9 +8,8 @@ import { idb } from '@/lib/idb';
 import type { MicroUsd } from '@/lib/money';
 
 import { accessKeyAccount, ensureKeyAuthorization, forgetAccessKey, type AccessKeyAccount } from './accessKey';
-import { createPasskey, forgetPasskey, getStoredPasskey, usePasskey, type RootAccount } from './passkey';
+import { createPasskey, forgetPasskey, getStoredPasskey, loadPasskey, type RootAccount } from './passkey';
 import { configureSession, resetSession } from './session';
-
 import type { MessageSigner } from './siwe';
 
 export interface ConnectedWallet {
@@ -27,7 +26,7 @@ function mockWallet(): ConnectedWallet {
   return {
     address: MOCK_ADDRESS,
     kind: 'mock',
-    signer: { address: MOCK_ADDRESS, signMessage: () => new Promise((r) => setTimeout(() => r(`0xmock${'00'.repeat(64)}`), 400)) },
+    signer: { address: MOCK_ADDRESS, signMessage: () => new Promise((r) => setTimeout(() => { r(`0xmock${'00'.repeat(64)}`); }, 400)) },
     preparePayments: () => Promise.resolve(),
   };
 }
@@ -49,7 +48,7 @@ function fromRoot(root: RootAccount): ConnectedWallet {
 /** Restore the wallet silently from the stored passkey (no prompt). */
 export async function restoreWallet(): Promise<ConnectedWallet | null> {
   if (env.mock) return (await getStoredPasskey()) ? mockWallet() : null;
-  const found = await usePasskey();
+  const found = await loadPasskey();
   return found ? fromRoot(found.account) : null;
 }
 
@@ -60,7 +59,7 @@ export async function connectWallet(): Promise<ConnectedWallet> {
     await idb.set('sr:passkey', { id: 'mock', publicKey: '0x', address: MOCK_ADDRESS, createdAt: new Date().toISOString() });
     return mockWallet();
   }
-  const existing = await usePasskey();
+  const existing = await loadPasskey();
   if (existing) return fromRoot(existing.account);
   const created = await createPasskey('SmartRouter');
   return fromRoot(created.account);
