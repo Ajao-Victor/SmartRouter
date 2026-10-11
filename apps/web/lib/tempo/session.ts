@@ -7,7 +7,7 @@
  */
 import { createJsonChannelStore, sessionManager } from 'mppx/client';
 
-import { ApiError } from '@/lib/api/client';
+import { ApiError, apiUrl } from '@/lib/api/client';
 import { env } from '@/lib/env';
 import { idb } from '@/lib/idb';
 import { toUsdString, type MicroUsd } from '@/lib/money';
@@ -85,8 +85,18 @@ export function paidFetch(input: string | URL, init?: RequestInit): Promise<Resp
   return res;
 }
 
+/** Mock-only routes (MSW) standing in for the on-chain top-up / close the manager performs. */
+async function mockSessionCall(action: 'top-up' | 'close', body: unknown): Promise<void> {
+  const res = await credentialedFetch(apiUrl(`/mock/session/`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) throw new ApiError({ status: res.status, code: 'PAYMENT_REQUIRED', message: 'Mock session call failed' });
+}
+
 /** User-initiated only (PDF: no automatic top-ups). */
 export async function topUpSession(amountUsd: MicroUsd): Promise<void> {
+  if (env.mock) {
+    await mockSessionCall('top-up', { amountUsd: toUsdString(amountUsd) });
+    return;
+  }
   const manager = configured?.manager;
   if (!manager) throw new ApiError({ status: 0, code: 'PAYMENT_REQUIRED', message: 'No payment session yet. Run a paid model first to open one.' });
   await manager.topUp(toUsdString(amountUsd));
@@ -94,6 +104,10 @@ export async function topUpSession(amountUsd: MicroUsd): Promise<void> {
 
 /** Closes the channel; the unspent deposit returns to the wallet. */
 export async function closeSession(): Promise<void> {
+  if (env.mock) {
+    await mockSessionCall('close', {});
+    return;
+  }
   const manager = configured?.manager;
   if (!manager) return;
   await manager.close();
