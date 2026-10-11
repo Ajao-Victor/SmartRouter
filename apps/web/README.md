@@ -1,50 +1,59 @@
 # SmartRouter — web app (`apps/web`)
 
-Next.js 15 (App Router) frontend for SmartRouter: tell it what you want done, it picks the best AI for
-your budget, and you pay per use from your embedded Tempo wallet via MPP.
+Next.js 15 (App Router) frontend for SmartRouter: tell it what you want done, it quotes the best AI
+models for your budget, and you pay per use from your Tempo wallet via MPP (`mppx`).
+
+The backend contract is *SmartRouter Frontend Architecture* (Oct 9, 2026). Everything the app calls is
+in `lib/api/endpoints.ts`; the SSE reader for `POST /run` is `lib/api/sse.ts`; payments are in
+`lib/tempo/` (viem passkey account → access key → `mppx` session manager).
 
 ## Run
 
 ```bash
 pnpm install                       # from the repo root (pnpm workspace)
-cp apps/web/.env.example apps/web/.env.local
 cd apps/web
-pnpm dev                           # .env.example ships NEXT_PUBLIC_MOCK=1: fully offline on MSW mocks
-# Set NEXT_PUBLIC_MOCK=0 only once the Hono API in NEXT_PUBLIC_API_URL is actually running.
+pnpm dev                           # http://localhost:3300 — .env.local points at the testnet API (Moderato)
 ```
 
-Open http://localhost:3300 (the dev script pins port 3300 so it never collides with other apps on 3000). Dev-only galleries: `/dev/tokens`, `/dev/primitives`, `/dev/fx`.
+Set `NEXT_PUBLIC_MOCK=1` in `.env.local` to run fully offline against the MSW mock API
+(`tests/mocks/`), which implements the same contract. Dev-only galleries: `/dev/tokens`, `/dev/primitives`, `/dev/fx`.
 
 ## Checks
 
 | Command | What |
 |---|---|
-| `pnpm lint` | ESLint (strict type-checked, a11y, import order, Web3 safety rules) |
+| `pnpm lint` | ESLint (strict type-checked, a11y, import order, no `localStorage`, no timers in payment code) |
 | `pnpm typecheck` | `tsc --noEmit` |
-| `pnpm test` | Vitest + Testing Library |
-| `pnpm test:e2e` | Playwright (mobile + desktop) against mocks |
+| `pnpm test` | Vitest + Testing Library + the mock-API contract tests |
+| `pnpm test:e2e` | Playwright demo path on mocks (mobile + desktop) |
 | `pnpm guard:hosts` | Fails if any MPP provider host appears in the frontend |
 | `scripts/ci.sh` | All of the above plus `pnpm build` |
 
 ## Environment
 
-All keys are public (`NEXT_PUBLIC_*`): API URL, Tempo network, SmartRouter payee and USDC.e addresses,
-object-storage host, Sentry DSN, fee hint, feature flags (`FLAG_COMPARE`, `FLAG_MUSIC`), `MOCK`.
-No provider, treasury or hot-wallet keys ever exist in this app. See `.env.example`.
+Four public values (PDF "Vercel environment variables"): `NEXT_PUBLIC_API_URL`,
+`NEXT_PUBLIC_TEMPO_NETWORK` (`tempo` | `moderato`), `NEXT_PUBLIC_CHAIN_ID` (4217 | 42431),
+`NEXT_PUBLIC_RPC_URL` (public RPC only). Optional: object-storage host, Sentry DSN, feature flags
+(`FLAG_COMPARE`, `FLAG_MUSIC`), `MOCK`. No keys of any kind exist in this app. See `.env.example` and
+`../../Deployment_Guide.md`.
+
+## How a turn works (PDF "A normal turn")
+
+1. The draft is quoted while you type: `POST /chats/:id/quote { prompt, modelId? }` → price on the Send button.
+2. Send → `POST /run { quoteId, prompt }`. Free quotes use plain `fetch`; paid quotes go through the
+   `mppx` session manager (first paid run deposits the allocation with one passkey approval, then
+   vouchers are signed silently by the access key).
+3. SSE events `meta` → `delta`… → `done { chargedUsd }` (or `fallback`, `pending`, `error`) drive the
+   stream store; `/sessions/current` is refreshed after each `done`.
+4. Allocation used → *Top up* / *Continue free* inline; failed answers are never charged.
 
 ## Content Security Policy
 
-`next.config.ts` emits a CSP: `connect-src` is the API + Sentry + `NEXT_PUBLIC_TEMPO_ORIGINS`;
-`frame-src` is `'self'` + the Tempo origins (the SDK's dialog mechanics — iframe or popup — are
-unconfirmed, see `Backend_Gaps_Report.md` §8). Verify in the browser console on testnet once the
-real Tempo Accounts SDK is wired: any blocked origin shows up as a CSP violation.
+`next.config.ts` emits a CSP whose `connect-src` is the API origin, the RPC origin and Sentry;
+`frame-src 'none'` (passkeys are native WebAuthn prompts, not iframes). Check the browser console on
+staging for violations after changing any origin.
 
 ## Monitoring
 
 Sentry initialises only when `NEXT_PUBLIC_SENTRY_DSN` is set. `sendDefaultPii` is off; prompts,
 wallet traffic breadcrumbs and hex addresses/hashes are scrubbed before send.
-
-## Where things live
-
-See `architecture.md` at the repo root. Backend facts come from the architecture PDF; proposed
-endpoints are isolated in `lib/api/endpoints.ts` and mocked in `tests/mocks/`.
