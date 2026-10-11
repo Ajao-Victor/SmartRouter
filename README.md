@@ -51,18 +51,20 @@ Built for the Colosseum hackathon (submission 12 Oct 2026). First beta community
 | `PRD.md`, `Technical_Requirements.md`, `User_Journey.md`, `UI_UX_Brief.md`, `design.md` | Product, contract, journeys and the futuristic UI spec |
 | `architecture.md`, `security.md`, `rules.md`, `agent.md` | Frontend architecture, security model, coding rules, agent operating rules |
 | `Implementation_Plan.md`, `Tasks.md`, `memory.md` | Phased plan, the 29 executed tasks with commit hashes, and the running decision ledger |
-| `Backend_Gaps_Report.md` | Open questions for the API team (REST contract, SDK packages, CSP origins) |
+| `Backend_Gaps_Report.md` | Questions for the API team and how the Oct 9 architecture PDF resolved them |
+| `Deployment_Guide.md` | Vercel deployment: root directory, branches (`main` = mainnet, `staging` = testnet), domains, the four public env vars, first-deploy checklist |
 
-The backend (Hono API, worker, provider adapters, catalog) is specified in the architecture document and
-lives outside this repo; the frontend talks to it through a single proposed-endpoint file and runs fully
-offline on MSW mocks.
+The backend (Hono API, worker, provider adapters, catalog) lives outside this repo. The frontend talks to
+it through one endpoint file (`apps/web/lib/api/endpoints.ts`) that follows *SmartRouter Frontend
+Architecture* (Oct 9, 2026) exactly, streams `/run` over SSE, and pays through the `mppx` session manager
+on a viem Tempo passkey account. The same contract is mocked with MSW for offline development and tests.
 
 ## Run the web app
 
 ```bash
 pnpm install
-cp apps/web/.env.example apps/web/.env.local
-cd apps/web && pnpm dev                         # http://localhost:3300 on MSW mocks (NEXT_PUBLIC_MOCK=1 in .env.example)
+cp apps/web/.env.example apps/web/.env.local      # testnet (Moderato) API from the PDF; set NEXT_PUBLIC_MOCK=1 to run offline
+cd apps/web && pnpm dev                         # http://localhost:3300
 ```
 
 Checks: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm guard:hosts`, `scripts/ci.sh`
