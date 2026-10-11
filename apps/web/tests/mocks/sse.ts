@@ -1,14 +1,18 @@
 /** Encode SSE frames and build a timed event stream for the mock `/run`. */
 
 export interface SseEvent {
+  /** `heartbeat` is written as a comment line (`: keep-alive`), like the live API. */
   event: string;
+  /** Payload, or a thunk evaluated when the frame is written (lets `done` record side effects late). */
   data: unknown;
   /** Delay before this event in ms. */
   delay?: number;
 }
 
 export function frame(ev: SseEvent): string {
-  return `event: ${ev.event}\ndata: ${JSON.stringify(ev.data)}\n\n`;
+  if (ev.event === 'heartbeat') return ': keep-alive\n\n';
+  const data = typeof ev.data === 'function' ? (ev.data as () => unknown)() : ev.data;
+  return `event: ${ev.event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
 export function sseStream(events: SseEvent[], speed = 1): ReadableStream<Uint8Array> {
