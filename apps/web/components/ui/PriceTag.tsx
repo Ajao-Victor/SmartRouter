@@ -1,10 +1,6 @@
-'use client';
-
 import { clsx } from 'clsx';
 
-import { formatUsd, toUsd, type MicroUsd } from '@/lib/money';
-
-import { NumberTicker } from '@/components/fx/NumberTicker';
+import { formatUsd, type MicroUsd } from '@/lib/money';
 
 export interface PriceTagProps {
   micro: MicroUsd;
@@ -30,19 +26,10 @@ const tones = {
   signal: 'text-signal',
 } as const;
 
-/**
- * Money display: mono, tabular, ticks when the amount changes. Prices are always shown
- * already rounded up to $0.0001 by the API (PDF). Never formats with floats for logic.
- */
+/** Money display: mono, tabular. Prices arrive already rounded up to $0.0001 by the API (PDF). */
 export function PriceTag({ micro, size = 'md', tone = 'price', freeLabel = false, className }: PriceTagProps) {
   if (freeLabel && micro === 0) {
     return <span className={clsx('num font-medium', sizes[size], tones.free, className)}>Free</span>;
   }
-  return (
-    <NumberTicker
-      value={toUsd(micro)}
-      format={(usd) => formatUsd(Math.round(usd * 1_000_000) as MicroUsd)}
-      className={clsx('num font-medium', sizes[size], tones[tone], className)}
-    />
-  );
+  return <span className={clsx('num font-medium', sizes[size], tones[tone], className)}>{formatUsd(micro)}</span>;
 }
