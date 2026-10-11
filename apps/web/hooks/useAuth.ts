@@ -8,16 +8,17 @@ import { isApiError } from '@/lib/api/client';
 import { api } from '@/lib/api/endpoints';
 import { apiUnreachableHint } from '@/lib/api/errors';
 import { queryKeys } from '@/lib/api/keys';
-import { getTempoAccounts } from '@/lib/tempo/accounts';
-import { signInWithEthereum } from '@/lib/tempo/siwe';
+import { signInWithWallet } from '@/lib/tempo/siwe';
+import { connectWallet, disconnectWallet, getCurrentWallet, restoreWallet, setCurrentWallet } from '@/lib/tempo/wallet';
 
 import { resetAllStores } from '@/stores';
 import { toast } from '@/stores/toastStore';
 import { useWalletStore } from '@/stores/walletStore';
 
 /**
- * Sign in: Tempo passkey dialog → SIWE → cookie → `/api/me`. Sign out: API logout, clear caches
- * and stores (rules.md §4.7). Status is mirrored in `walletStore`.
+ * Wallet sign-in (PDF "Wallet and sign-in"): connect the Tempo passkey → `POST /auth/challenge`
+ * → sign the SIWE message → `POST /auth/verify` (cookie) → `GET /me`. The same account pays, so
+ * the access key is authorized on the first paid run, not here.
  */
 export function useAuth() {
   const qc = useQueryClient();
@@ -27,17 +28,15 @@ export function useAuth() {
   const signIn = useMutation({
     mutationFn: async () => {
       const w = useWalletStore.getState();
-      const tempo = getTempoAccounts();
-      w.setStatus('initialising');
-      await tempo.init();
       w.setStatus('connecting');
-      const account = await tempo.signIn();
-      w.setAddress(account.address);
+      const wallet = await connectWallet();
+      setCurrentWallet(wallet);
+      w.setAccount({ address: wallet.address, kind: wallet.kind });
       w.setStatus('signing');
-      const user = await signInWithEthereum(tempo, account);
+      await signInWithWallet(wallet.signer);
       w.setSessionReady(true);
       w.setStatus('connected');
-      return user;
+      return api.me.get();
     },
     onSuccess: (user) => {
       qc.setQueryData(queryKeys.me(), user);
@@ -45,11 +44,12 @@ export function useAuth() {
     },
     onError: (err) => {
       const w = useWalletStore.getState();
-      const cancelled = err instanceof Error && /cancel|abort/i.test(err.message);
+      const cancelled = err instanceof Error && (/cancel|abort|NotAllowed/i.test(err.message) || err.name === 'NotAllowedError');
       w.setError(cancelled ? null : err instanceof Error ? err.message : 'Sign-in failed');
       if (cancelled) toast.info('Sign-in cancelled');
-      else if (isApiError(err) && err.code === 'network') toast.error('Could not reach SmartRouter', apiUnreachableHint());
-      else toast.error("Couldn't verify your signature. Try again.", isApiError(err) ? err.message : undefined);
+      else if (isApiError(err) && err.code === 'NETWORK') toast.error('Could not reach SmartRouter', apiUnreachableHint());
+      else if (isApiError(err) && err.code === 'FORBIDDEN') toast.error('This wallet is not allowed to sign in here', err.message);
+      else toast.error("Couldn't verify your signature. Try again.", isApiError(err) ? err.message : err instanceof Error ? err.message : undefined);
     },
   });
 
@@ -58,7 +58,7 @@ export function useAuth() {
       try {
         await api.auth.logout();
       } finally {
-        await getTempoAccounts().signOut();
+        await disconnectWallet();
       }
     },
     onSettled: () => {
@@ -67,16 +67,16 @@ export function useAuth() {
     },
   });
 
+  /** Silently rebuild the wallet from the stored passkey (no prompt); the cookie decides sign-in. */
   const restore = useCallback(async () => {
-    const tempo = getTempoAccounts();
-    await tempo.init();
-    const account = await tempo.getAccount();
+    if (getCurrentWallet()) return;
+    const wallet = await restoreWallet();
+    if (!wallet) return;
+    setCurrentWallet(wallet);
     const w = useWalletStore.getState();
-    if (account) {
-      w.setAddress(account.address);
-      w.setStatus('connected');
-    }
+    w.setAccount({ address: wallet.address, kind: wallet.kind });
+    w.setStatus('connected');
   }, []);
 
-  return { status, address, signIn, signOut, restore };
+  return { signIn, signOut, restore, status, address };
 }
