@@ -5,12 +5,12 @@ import { useMutation } from '@tanstack/react-query';
 import { api } from '@/lib/api/endpoints';
 import type { CompareVoteInput, FeedbackInput } from '@/lib/api/types';
 
-/** Thumbs up/down feed the recommendation engine (PDF lifecycle step 11). */
+/** Thumbs up/down under an answer (`POST /feedback { requestId, rating: 1 | -1 }`). */
 export function useFeedback() {
-  return useMutation({ mutationFn: (input: FeedbackInput) => api.feedback.vote(input) });
+  return useMutation({ mutationFn: (input: FeedbackInput) => api.feedback.rate(input) });
 }
 
-/** Compare picks are recorded as compare votes (PDF). */
+/** Compare pick (`POST /compare/vote { compareGroup, winnerRequestId, prompt }`). */
 export function useCompareVote() {
-  return useMutation({ mutationFn: (input: CompareVoteInput) => api.feedback.compare(input) });
+  return useMutation({ mutationFn: (input: CompareVoteInput) => api.feedback.compareVote(input) });
 }
