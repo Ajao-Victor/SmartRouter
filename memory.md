@@ -36,6 +36,13 @@
 | Providers | OpenAI, Anthropic, OpenRouter, DeepSeek, Mistral AI, Groq, Perplexity, fal.ai, StableStudio, Suno (~40 models) |
 | Task categories | chat, writing, coding, research, translation, image, music |
 
+## Live integration findings (2026-10-11)
+
+- Deployed frontend: `https://smart-router-h6hl.vercel.app` (Vercel). The testnet API's `APP_ORIGINS` lists only that origin, so a localhost dev server is blocked by CORS until the backend adds `http://localhost:3300`.
+- On 2026-10-11 the backend author (0xAristos) merged PR #1 on `main`: sign-in moved from Tempo passkeys/SIWE to **Privy** (email/Google, embedded wallet, `POST /auth/privy`, `X-Session-Token` header), guest mode, usage banners, deposit dialog (close-and-reopen, no top-up in v1). Requires `NEXT_PUBLIC_PRIVY_APP_ID` on Vercel. The passkey implementation is kept on branch `feat/live-contract-wallet`.
+- Verified from scripts against the live testnet API: SIWE challenge/verify, chats, quotes, free and paid `/run` through mppx (channel open, `remainingUsd`), top-up, close, Moderato faucet (`client.faucet.fundSync`), and a TIP-20 transfer (`client.token.transfer({ amount: { formatted } })`).
+- Live response shapes the frontend must accept (regression test `lib/api/__tests__/liveShapes.test.ts`): `/me` nests `settings` and sends `usage` + `allocation`; `PATCH /me/settings` returns settings only; `/sessions/current` has `paidRunsEnabled`, `network {chainId, token, recipient, operator}`, `usage`; `/catalog` uses `id`, `priceEstimateUsd`, `medianLatencyMs`, `quality` per task; options send `speed: "Fast"`; chats list uses `lastMessageAt`; history is `{ chat, messages: [{ content, resultRef, seq }], hasMore }`; `/requests` uses `priceUsd` + `charged: boolean`, `errorCode`; 402 details carry `freeFallback.freeRemainingToday` and `auto`.
+
 ## Status board
 
 | Phase | Status |
